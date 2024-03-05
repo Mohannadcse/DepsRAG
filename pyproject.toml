@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "dependencyrag"
+version = "0.1.1"
+description = "Program Dependency Chatbot"
+authors = ["Mohannadcse <mohannad.alhanahnah@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.9.1,<3.12"
+langroid = "^0.1.200"
+neo4j = "^5.18.0"
+pyvis = "^0.3.2"
+chainlit = "^1.0.301"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
