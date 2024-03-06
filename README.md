@@ -1,3 +1,10 @@
+<div align="center">
+  <img src="docs/DepChatbot.png" alt="Logo" 
+        width="400" align="center">
+</div>
+
+
+
 # DependencyRAG
 
 The chatbot will ask you to provide the name of the `PyPi` package.
@@ -75,6 +82,18 @@ Run like this:
 ```
 python3 dependencyrag/dependency_chatbot.py
 ```
+
+Here is a recording shows the example in action:
+![Demo](docs/dependency_chatbot.gif)
+
+
+Run the UI version like this:
+```
+chainlit run dependencyrag/chainlit/chainlit_dependency_chatbot.py
+```
+
+Here is a recording shows the example in action:
+![Demo](docs/chainlit_dependency_chatbot.gif)
 
 
 **NOTE:** the dependency graph is constructed based
