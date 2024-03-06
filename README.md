@@ -1,8 +1,29 @@
 # DependencyRAG
 
-This project was original developed within the project [Langroid](https://github.com/langroid/langroid). 
+The chatbot will ask you to provide the name of the `PyPi` package.
+It will then the tool `GoogleSearchTool` to get the version of
+this package (you can skip this process by providing the intended version).
+The chatbot agent will ask to confirm the version number before
+proceeding with constructing the dependency graph.
 
-The current version focuses on PyPI ecosystem.
+Finally, after constructing the dependency graph, you can ask the chatbot
+questions about the dependency graph such as these (specific package names are
+used here for illustration purposes, but of course you can use other names):
+
+- what's the depth of the graph?
+- what are the direct dependencies?
+- any dependency on pytorch? which version?
+- Is this package pytorch vunlnerable?
+  (Note that in this case the chatbot will consult the 
+  tool `GoogleSearchTool` to get an answer from the internet.)
+- tell me 3 interesting things about this package or dependency graph
+- what's the path between package-1 and package-2? (provide names of package-1
+  and -2)
+- Tell me the names of all packages in the dependency graph that use pytorch.
+
+
+This project was originally developed within the project [Langroid](https://github.com/langroid/langroid).
+It is a chatbot that answers questions about the dependencies of a given PyPI package.
 
 ## Requirements:
 
@@ -55,26 +76,6 @@ Run like this:
 python3 dependencyrag/dependency_chatbot.py
 ```
 
-`DependencyAgent` then will ask you to provide the name of the `PyPi` package.
-It will then the tool `GoogleSearchTool` to get the version of
-this package (you can skip this process by providing the intended version).
-The `DependencyAgent` agent will ask to confirm the version number before
-proceeding with constructing the dependency graph.
-
-Finally, after constructing the dependency graph, you can ask `DependencyAgent`
-questions about the dependency graph such as these (specific package names are
-used here for illustration purposes, but of course you can use other names):
-
-- what's the depth of the graph?
-- what are the direct dependencies?
-- any dependency on pytorch? which version?
-- Is this package pytorch vunlnerable?
-  (Note that in this case the `DependencyAgent` agent will consult the 
-  tool `GoogleSearchTool` to get an answer from the internet.)
-- tell me 3 interesting things about this package or dependency graph
-- what's the path between package-1 and package-2? (provide names of package-1
-  and -2)
-- Tell me the names of all packages in the dependency graph that use pytorch.
 
 **NOTE:** the dependency graph is constructed based
 on [DepsDev API](https://deps.dev/). Therefore, the Chatbot will not be able to
