@@ -91,14 +91,9 @@ Run the UI version like this:
 ```
 chainlit run dependencyrag/chainlit/chainlit_dependency_chatbot.py
 ```
-<!-- 
+
 Here is a recording shows the example in action:
-![Demo](docs/chainlit_dependency_chatbot.gif) -->
-
-<video width="320" height="240" controls>
-  <source src="docs/chainlit_dependency_chatbot.mp4" type="video/mp4">
-</video>
-
+![Demo](docs/chainlit_dependency_chatbot.gif)
 
 **NOTE:** the dependency graph is constructed based
 on [DepsDev API](https://deps.dev/). Therefore, the Chatbot will not be able to
