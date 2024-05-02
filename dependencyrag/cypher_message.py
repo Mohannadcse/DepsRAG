@@ -1,13 +1,13 @@
 CONSTRUCT_DEPENDENCY_GRAPH = """
         with "{package_type}" as system, "{package_name}" as name, "{package_version}" as version
 
-        call apoc.load.json("https://api.deps.dev/v3alpha/systems/"+system+"/packages/"
-                            +name+"/versions/"+version+":dependencies")
+        call apoc.load.json("https://api.deps.dev/v3alpha/systems/"+apoc.text.urlencode(system)+"/packages/"
+                            +apoc.text.urlencode(name)+"/versions/"+apoc.text.urlencode(version)+":dependencies")
         yield value as r
         
         call {{ with r
                 unwind r.nodes as package
-                merge (p:Package:PyPi {{name: package.versionKey.name, version: package.versionKey.version}})
+                merge (p:Package:{package_type_system} {{name: package.versionKey.name, version: package.versionKey.version}})
                 return collect(p) as packages
         }}
         call {{ with r, packages
@@ -18,16 +18,16 @@ CONSTRUCT_DEPENDENCY_GRAPH = """
             return count(*) as numRels
         }}
         
-        match (root:Package:PyPi) where root.imported is null
+        match (root:Package:{package_type_system}) where root.imported is null
         set root.imported = true
         with "{package_type}" as system, root.name as name, root.version as version
-        call apoc.load.json("https://api.deps.dev/v3alpha/systems/"+system+"/packages/"
-                            +name+"/versions/"+version+":dependencies")
+        call apoc.load.json("https://api.deps.dev/v3alpha/systems/"+apoc.text.urlencode(system)+"/packages/"
+                            +apoc.text.urlencode(name)+"/versions/"+apoc.text.urlencode(version)+":dependencies")
         yield value as r
         
         call {{ with r
                 unwind r.nodes as package
-                merge (p:Package:PyPi {{name: package.versionKey.name, version: package.versionKey.version}})
+                merge (p:Package:{package_type_system} {{name: package.versionKey.name, version: package.versionKey.version}})
                 return collect(p) as packages
         }}
         call {{ with r, packages

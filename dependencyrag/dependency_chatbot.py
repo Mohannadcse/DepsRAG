@@ -41,7 +41,8 @@ from langroid.agent.special.neo4j.neo4j_chat_agent import (
     Neo4jChatAgentConfig,
     Neo4jSettings,
 )
-from langroid.language_models.openai_gpt import OpenAIGPTConfig, OpenAIChatModel
+# from langroid.language_models.openai_gpt import OpenAIGPTConfig
+from langroid.language_models.azure_openai import AzureConfig
 from langroid.utils.constants import NO_ANSWER
 from langroid.utils.configuration import set_global, Settings
 from langroid.agent.tool_message import ToolMessage
@@ -57,7 +58,7 @@ class DepGraphTool(ToolMessage):
     request = "construct_dependency_graph"
     purpose = f"""Get package <package_version>, <package_type>, and <package_name>.
     For the <package_version>, obtain the recent version, it should be a number. 
-    For the <package_type>, return if the package is PyPI or not.
+    For the <package_type>, return if the package is PyPI, NPM, or Maven.
       Otherwise, return {NO_ANSWER}.
     For the <package_name>, return the package name provided by the user.
     ALL strings are in lower case.
@@ -90,10 +91,21 @@ class DependencyGraphAgent(Neo4jChatAgent):
             # self.config.database_created = True
             return "Database Exists"
         else:
+            if msg.package_type.lower() == "npm":
+                package_type_system = "NPM"
+            elif msg.package_type.lower() == "pypi":
+                package_type_system = "PyPi"
+            elif msg.package_type.lower() == "go":
+                package_type_system = "GO"
+            elif msg.package_type.lower() == "cargo":
+                package_type_system = "CARGO"
+            else:
+                package_type_system = ""                
             construct_dependency_graph = CONSTRUCT_DEPENDENCY_GRAPH.format(
                 package_type=msg.package_type.lower(),
                 package_name=msg.package_name,
                 package_version=msg.package_version,
+                package_type_system=package_type_system,
             )
             response = self.write_query(construct_dependency_graph)
             if response.success:
@@ -136,7 +148,8 @@ class DependencyGraphAgent(Neo4jChatAgent):
                 # node_id = node.get("id", None)  # Assuming each node has a unique 'id'
                 node_label = node.get("name", "Unknown Node")
                 node_title = f"Version: {node.get('version', 'N/A')}"
-                node_color = "blue" if node.get("imported", False) else "green"
+                node_color = "blue"
+                # if node.get("imported", False) else "green"
 
                 # Check if node has been added before
                 if node_label not in node_set:
@@ -167,7 +180,7 @@ class DependencyGraphAgent(Neo4jChatAgent):
                 # Ensure both source and target nodes are added before adding the edge
                 if source_label not in node_set:
                     source_title = f"Version: {source.get('version', 'N/A')}"
-                    source_color = "blue" if source.get("imported", False) else "green"
+                    source_color = "blue"
                     nt.add_node(
                         source_label,
                         label=source_label,
@@ -177,7 +190,7 @@ class DependencyGraphAgent(Neo4jChatAgent):
                     node_set.add(source_label)
                 if target_label not in node_set:
                     target_title = f"Version: {target.get('version', 'N/A')}"
-                    target_color = "blue" if target.get("imported", False) else "green"
+                    target_color = "blue"
                     nt.add_node(
                         target_label,
                         label=target_label,
@@ -218,6 +231,12 @@ def main(
             cache=nocache,
         )
     )
+    # llm_cfg = OpenAIGPTConfig(
+        # chat_model=model or OpenAIChatModel.GPT4_TURBO,
+    #     chat_context_length=16_000,  # adjust based on model
+    #     temperature=0,
+    #     timeout=45,
+    # )
     print(
         """
         [blue]Welcome to Dependency Analysis chatbot!
@@ -235,9 +254,10 @@ def main(
             show_stats=False,
             use_tools=tools,
             use_functions_api=not tools,
-            llm=OpenAIGPTConfig(
-                chat_model=model or OpenAIChatModel.GPT4_TURBO,
-            ),
+            # llm=OpenAIGPTConfig(
+            #     chat_model=model or OpenAIChatModel.GPT4_TURBO,
+            # ),
+            llm=AzureConfig(),
         ),
     )
 
@@ -247,14 +267,14 @@ def main(
     FIRST, I'll give you the name of the package that I want to analyze.
     
     THEN, you can also use the `web_search` tool/function to find out information about a package,
-      such as version number and package type (PyPi or not). 
+      such as version number and package type (PyPi, NPM, or Maven). 
     
     If unable to get this info, you can ask me and I can tell you.
     
     DON'T forget to include the package name in your questions. 
       
     After receiving this information, make sure the package version is a number and the
-    package type is PyPi.
+    package type.
     THEN ask the user if they want to construct the dependency graph,
     and if so, use the tool/function `construct_dependency_graph` to construct
       the dependency graph. Otherwise, say `Couldn't retrieve package type or version`
