@@ -12,6 +12,7 @@ chainlit run dependencyrag/dependency_chatbot.py
 The requirements are described in
  `https://github.com/Mohannadcse/DependencyRAG/blob/main/README.md`
 """
+
 import typer
 from rich import print
 

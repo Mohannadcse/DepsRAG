@@ -26,6 +26,7 @@ Run like this:
 python3 dependencyrag/dependency_chatbot.py
 ```
 """
+
 import typer
 from rich import print
 from rich.prompt import Prompt
@@ -41,7 +42,7 @@ from langroid.agent.special.neo4j.neo4j_chat_agent import (
     Neo4jChatAgentConfig,
     Neo4jSettings,
 )
-# from langroid.language_models.openai_gpt import OpenAIGPTConfig
+from langroid.language_models.openai_gpt import OpenAIGPTConfig, OpenAIChatModel
 from langroid.language_models.azure_openai import AzureConfig
 from langroid.utils.constants import NO_ANSWER
 from langroid.utils.configuration import set_global, Settings
@@ -100,7 +101,7 @@ class DependencyGraphAgent(Neo4jChatAgent):
             elif msg.package_type.lower() == "cargo":
                 package_type_system = "CARGO"
             else:
-                package_type_system = ""                
+                package_type_system = ""
             construct_dependency_graph = CONSTRUCT_DEPENDENCY_GRAPH.format(
                 package_type=msg.package_type.lower(),
                 package_name=msg.package_name,
@@ -232,7 +233,7 @@ def main(
         )
     )
     # llm_cfg = OpenAIGPTConfig(
-        # chat_model=model or OpenAIChatModel.GPT4_TURBO,
+    # chat_model=model or OpenAIChatModel.GPT4_TURBO,
     #     chat_context_length=16_000,  # adjust based on model
     #     temperature=0,
     #     timeout=45,
@@ -254,36 +255,36 @@ def main(
             show_stats=False,
             use_tools=tools,
             use_functions_api=not tools,
-            # llm=OpenAIGPTConfig(
-            #     chat_model=model or OpenAIChatModel.GPT4_TURBO,
-            # ),
-            llm=AzureConfig(),
+            llm=OpenAIGPTConfig(
+                chat_model=model or OpenAIChatModel.GPT4_TURBO,
+            ),
+            # llm=AzureConfig(),
         ),
     )
 
     system_message = f"""You are an expert in Dependency graphs and analyzing them using
-    Neo4j. 
-    
+    Neo4j.
+
     FIRST, I'll give you the name of the package that I want to analyze.
-    
+
     THEN, you can also use the `web_search` tool/function to find out information about a package,
-      such as version number and package type (PyPi, NPM, or Maven). 
-    
+      such as version number and package type (PyPi, NPM, Cargo, or GO).
+
     If unable to get this info, you can ask me and I can tell you.
-    
-    DON'T forget to include the package name in your questions. 
-      
+
+    DON'T forget to include the package name in your questions.
+
     After receiving this information, make sure the package version is a number and the
     package type.
     THEN ask the user if they want to construct the dependency graph,
     and if so, use the tool/function `construct_dependency_graph` to construct
       the dependency graph. Otherwise, say `Couldn't retrieve package type or version`
       and {NO_ANSWER}.
-    After constructing the dependency graph successfully, you will have access to Neo4j 
+    After constructing the dependency graph successfully, you will have access to Neo4j
     graph database, which contains dependency graph.
     You will try your best to answer my questions. Note that:
     1. You can use the tool `get_schema` to get node label and relationships in the
-    dependency graph. 
+    dependency graph.
     2. You can use the tool `retrieval_query` to get relevant information from the
       graph database. I will execute this query and send you back the result.
       Make sure your queries comply with the database schema.
