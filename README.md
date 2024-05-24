@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/DepChatbot.png" alt="Logo" 
+  <img src="docs/DepRAG.png" alt="Logo" 
         width="400" align="center">
 </div>
 
@@ -7,30 +7,31 @@
 
 # DependencyRAG
 
-The chatbot will ask you to provide the name of the `PyPi` package.
-It will then the tool `GoogleSearchTool` to get the version of
-this package (you can skip this process by providing the intended version).
-The chatbot agent will ask to confirm the version number before
-proceeding with constructing the dependency graph.
+`DependencyRAG` is a chatbot that answers user's questions about software dependency knowledge graphs. `DependencyRAG` offers the following features:
+- Constructing the software dependencies (direct and transitive) as knolwedge graphs
+- Supporting 4 popular software ecosystems (i.e. PyPI, NPM, Cargo, and Go). 
+- Generatiing atutomatically Cypher queries to retrieve information from the KG.
+- Augmenting users' questions with the retrieved information.
 
-Finally, after constructing the dependency graph, you can ask the chatbot
+The workflow of `DependencyRAG` as follows: 
+- The chatbot will ask you to provide the name and ecosystem of the software package.
+- It will then the tool `GoogleSearchTool` to get the version of this package (you can skip this process by providing the intended version).
+- The chatbot will ask to confirm the version number before proceeding with constructing the dependencies as knowledge graph.
+-  Finally, after constructing the dependency graph, you can ask the chatbot
 questions about the dependency graph such as these (specific package names are
 used here for illustration purposes, but of course you can use other names):
 
-- what's the depth of the graph?
-- what are the direct dependencies?
-- any dependency on pytorch? which version?
-- Is this package pytorch vunlnerable?
+   - what's the depth of the graph?
+   - what are the direct dependencies?
+   - any dependency on pytorch? which version?
+   - Is this package pytorch vunlnerable?
   (Note that in this case the chatbot will consult the 
   tool `GoogleSearchTool` to get an answer from the internet.)
-- tell me 3 interesting things about this package or dependency graph
-- what's the path between package-1 and package-2? (provide names of package-1
+   - tell me 3 interesting things about this package or dependency graph
+   - what's the path between package-1 and package-2? (provide names of package-1
   and -2)
-- Tell me the names of all packages in the dependency graph that use pytorch.
+   - Tell me the names of all packages in the dependency graph that use pytorch.
 
-
-This project was originally developed within the project [Langroid](https://github.com/langroid/langroid).
-It is a chatbot that answers questions about the dependencies of a given PyPI package.
 
 ## Requirements:
 
@@ -52,7 +53,7 @@ password, and database), while creating the constructor `Neo4jChatAgentConfig`.
 These settings can be set inside the `.env` file as shown in [`.env-template`](.env-template)
 
 
-## PyPi Packages Dependency Chatbot
+## Architecture of DependencyRAG
 
 This example uses a `DependencyGraphAgent` 
 (derived from [`Neo4jChatAgent`](https://github.com/langroid/langroid/blob/main/langroid/agent/special/neo4j/neo4j_chat_agent.py)).
