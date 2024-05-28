@@ -39,13 +39,17 @@ used here for illustration purposes, but of course you can use other names):
 <summary> <b>Click to expand</b></summary>
 
 - **May 2024:** 
-  - Added integration with [OSV](https://osv.dev/) vulnerability database to search for vulnerabilities
+  - Adding integration with [OSV](https://osv.dev/) vulnerability database to search for 
+  vulnerabilities
 
 - **April 2024:**
    - Supporting the construction of dependency graph for Go, Cargo, and NPM.
 
 - **March 2024:**
    - Supporting Chainlit to run DependencyRAG via UI
+
+- **Feb 2024:**
+   - Adding tool to visualize the dependency graph
 
 </details>
 
@@ -92,6 +96,9 @@ The `Neo4jChatAgent` has access to these tools/function-calls:
 - `GraphSchemaTool`: get schema of Neo4j knowledge-graph
 - `CypherRetrievalTool`: generate cypher queries to get information from
    Neo4j knowledge-graph (Cypher is the query language for Neo4j)
+- `VulnerabilityCheck`: search OSV vulnerability DB based on package name, version, and 
+its ecosystem.
+- `VisualizeGraph`: visualize the dependency grpah
 
 ### Running the example
 
