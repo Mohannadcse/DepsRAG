@@ -33,6 +33,22 @@ used here for illustration purposes, but of course you can use other names):
    - Tell me the names of all packages in the dependency graph that use pytorch.
 
 
+# :fire: Updates/Releases
+
+<details>
+<summary> <b>Click to expand</b></summary>
+
+- **May 2024:** 
+  - Added integration with [OSV](https://osv.dev/) vulnerability database to search for vulnerabilities
+
+- **April 2024:**
+   - Supporting the construction of dependency graph for Go, Cargo, and NPM.
+
+- **March 2024:**
+   - Supporting Chainlit to run DependencyRAG via UI
+
+</details>
+
 ## Requirements:
 
 This example relies on the `neo4j` Database. The easiest way to get access to neo4j is
