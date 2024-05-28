@@ -28,6 +28,8 @@ python3 dependencyrag/dependency_chatbot.py
 """
 
 import typer
+import requests
+import json
 from rich import print
 from rich.prompt import Prompt
 from dotenv import load_dotenv
@@ -55,10 +57,21 @@ from cypher_message import CONSTRUCT_DEPENDENCY_GRAPH
 app = typer.Typer()
 
 
+class VulnerabilityCheck(ToolMessage):
+    request = "vulnerability_check"
+    purpose = """
+      Use this tool/function to check for vulnerabilities based on the provided
+      <package_version>, <package_type>, and <package_name>.
+      """
+    package_version: str
+    package_type: str
+    package_name: str
+
+
 class DepGraphTool(ToolMessage):
     request = "construct_dependency_graph"
     purpose = f"""Get package <package_version>, <package_type>, and <package_name>.
-    For the <package_version>, obtain the recent version, it should be a number. 
+    For the <package_version>, obtain the recent version, it should be a number.
     For the <package_type>, return if the package is PyPI, NPM, or Maven.
       Otherwise, return {NO_ANSWER}.
     For the <package_name>, return the package name provided by the user.
@@ -216,6 +229,31 @@ class DependencyGraphAgent(Neo4jChatAgent):
         except Exception as e:
             print(f"Failed to automatically open the graph in a browser: {e}")
 
+    def vulnerability_check(self, msg: VulnerabilityCheck) -> str:
+        if msg.package_type.lower() == "pypi":
+            ecosystem = "PyPI"
+        # Data payload
+        data = {
+            "version": msg.package_version,
+            "package": {"name": msg.package_name, "ecosystem": ecosystem},
+        }
+
+        # URL
+        url = "https://api.osv.dev/v1/query"
+
+        # Send POST request
+        response = requests.post(url, data=json.dumps(data))
+        response_data = response.json()
+        if "vulns" in response_data:
+            for vuln in response_data["vulns"]:
+                if "references" in vuln:
+                    del vuln["references"]
+                if "affected" in vuln:
+                    for affected in vuln["affected"]:
+                        if "versions" in affected:
+                            del affected["versions"]
+        return json.dumps(response_data, indent=4)
+
 
 @app.command()
 def main(
@@ -260,7 +298,7 @@ def main(
             show_stats=False,
             use_tools=tools,
             use_functions_api=not tools,
-            llm=llm
+            llm=llm,
         ),
     )
 
@@ -292,6 +330,7 @@ def main(
       Make sure your queries comply with the database schema.
     3. Use the `web_search` tool/function to get information if needed.
     To display the dependency graph use this tool `visualize_dependency_graph`.
+    4. Use the `vulnerability_check` tool to check for vulnerabilities in the package.
     """
     task = Task(
         dependency_agent,
@@ -302,6 +341,7 @@ def main(
     dependency_agent.enable_message(DepGraphTool)
     dependency_agent.enable_message(GoogleSearchTool)
     dependency_agent.enable_message(VisualizeGraph)
+    dependency_agent.enable_message(VulnerabilityCheck)
 
     task.run()
 
