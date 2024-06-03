@@ -104,7 +104,7 @@ its ecosystem.
 
 Run like this:
 ```
-python3 DepsRAG/dependency_chatbot.py
+python3 dependencyrag/dependency_chatbot.py
 ```
 
 Here is a recording shows the example in action:
@@ -113,7 +113,7 @@ Here is a recording shows the example in action:
 
 Run the UI version like this:
 ```
-chainlit run DepsRAG/chainlit/chainlit_dependency_chatbot.py
+chainlit run dependencyrag/chainlit/chainlit_dependency_chatbot.py
 ```
 
 Here is a recording shows the example in action:
