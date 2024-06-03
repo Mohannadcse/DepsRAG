@@ -5,15 +5,15 @@
 
 
 
-# DependencyRAG
+# DepsRAG
 
-`DependencyRAG` is a chatbot that answers user's questions about software dependency knowledge graphs. `DependencyRAG` offers the following features:
+`DepsRAG` is a chatbot that answers user's questions about software dependency knowledge graphs. `DepsRAG` offers the following features:
 - Constructing the software dependencies (direct and transitive) as knolwedge graphs
 - Supporting 4 popular software ecosystems (i.e. PyPI, NPM, Cargo, and Go). 
 - Generatiing atutomatically Cypher queries to retrieve information from the KG.
 - Augmenting users' questions with the retrieved information.
 
-The workflow of `DependencyRAG` as follows: 
+The workflow of `DepsRAG` as follows: 
 - The chatbot will ask you to provide the name and ecosystem of the software package.
 - It will then the tool `GoogleSearchTool` to get the version of this package (you can skip this process by providing the intended version).
 - The chatbot will ask to confirm the version number before proceeding with constructing the dependencies as knowledge graph.
@@ -46,7 +46,7 @@ used here for illustration purposes, but of course you can use other names):
    - Supporting the construction of dependency graph for Go, Cargo, and NPM.
 
 - **March 2024:**
-   - Supporting Chainlit to run DependencyRAG via UI
+   - Supporting Chainlit to run DepsRAG via UI
 
 - **Feb 2024:**
    - Adding tool to visualize the dependency graph
@@ -73,7 +73,7 @@ password, and database), while creating the constructor `Neo4jChatAgentConfig`.
 These settings can be set inside the `.env` file as shown in [`.env-template`](.env-template)
 
 
-## Architecture of DependencyRAG
+## Architecture of DepsRAG
 
 This example uses a `DependencyGraphAgent` 
 (derived from [`Neo4jChatAgent`](https://github.com/langroid/langroid/blob/main/langroid/agent/special/neo4j/neo4j_chat_agent.py)).
@@ -104,7 +104,7 @@ its ecosystem.
 
 Run like this:
 ```
-python3 dependencyrag/dependency_chatbot.py
+python3 DepsRAG/dependency_chatbot.py
 ```
 
 Here is a recording shows the example in action:
@@ -113,7 +113,7 @@ Here is a recording shows the example in action:
 
 Run the UI version like this:
 ```
-chainlit run dependencyrag/chainlit/chainlit_dependency_chatbot.py
+chainlit run DepsRAG/chainlit/chainlit_dependency_chatbot.py
 ```
 
 Here is a recording shows the example in action:
