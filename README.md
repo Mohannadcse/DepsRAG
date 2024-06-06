@@ -123,3 +123,19 @@ Here is a recording shows the example in action:
 on [DepsDev API](https://deps.dev/). Therefore, the Chatbot will not be able to
 construct the dependency graph if this API doesn't provide dependency metadata
 infromation. 
+
+# DepsRAG Paper Citation
+
+You can find the paper that describes the details of DepsRAG [HERE](https://arxiv.org/abs/2405.20455)
+
+```
+@misc{alhanahnah2024depsrag,
+      title={DepsRAG: Towards Managing Software Dependencies using Large Language Models}, 
+      author={Mohannad Alhanahnah and Yazan Boshmaf and Benoit Baudry},
+      year={2024},
+      eprint={2405.20455},
+      archivePrefix={arXiv},
+      primaryClass={cs.SE}
+}
+```
+
