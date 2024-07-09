@@ -51,8 +51,8 @@ from langroid.utils.configuration import set_global, Settings
 from langroid.agent.tool_message import ToolMessage
 from langroid.agent.tools.google_search_tool import GoogleSearchTool
 
-from cypher_message import CONSTRUCT_DEPENDENCY_GRAPH
-from critic_plan_task import Neo4jRAGTaskCreator
+from dependencyrag.cypher_message import CONSTRUCT_DEPENDENCY_GRAPH
+from dependencyrag.critic_plan_task import Neo4jRAGTaskCreator
 
 app = typer.Typer()
 
