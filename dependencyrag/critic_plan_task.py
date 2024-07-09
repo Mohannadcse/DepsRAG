@@ -44,7 +44,7 @@ class QueryPlanAnswerTool(ToolMessage):
 class QueryPlanFeedbackTool(ToolMessage):
     request = "query_plan_feedback"
     purpose = """
-    To give <feedback> regarding the query plan, 
+    To give <feedback> regarding the query plan,
     along with a <suggested_fix> if any (empty string if no fix is suggested).
     """
     feedback: str
@@ -77,27 +77,23 @@ class QueryPlanCriticConfig(KGQueryPlanAgentConfig):
     {{kg_schema}}
 
     You will receive a QUERY PLAN consisting of:
-    - ORIGINAL QUERY, 
+    - ORIGINAL QUERY,
     - Cypher-Like FILTER, WHICH CAN BE EMPTY (and it's fine if results sound reasonable)
       FILTER SHOULD ONLY BE USED IF EXPLICITLY REQUIRED BY THE QUERY.
     - REPHRASED QUERY that will be used to match against the CONTENT (not filterable)
          of the graph database.
-      In general the REPHRASED QUERY should be relied upon to match the CONTENT 
-      of the graph database. Thus the REPHRASED QUERY itself acts like a 
-      SEMANTIC/LEXICAL/FUZZY FILTER since the Assistant is able to use it to match 
-      the CONTENT of the docs in various ways (semantic, lexical, fuzzy, etc.).         
 
-    Your job is to act as a CRITIC and provide feedback, 
+    Your job is to act as a CRITIC and provide feedback,
     ONLY using the `query_plan_feedback` tool, and DO NOT SAY ANYTHING ELSE.
 
     Here is how you must examine the QUERY PLAN + ANSWER:
-    - ALL filtering conditions in the original query must be EXPLICITLY 
+    - ALL filtering conditions in the original query must be EXPLICITLY
       mentioned in the FILTER, and the QUERY field should not be used for filtering.
     - If the ANSWER contains an ERROR message, then this means that the query
-      plan execution FAILED, and your feedback should say INVALID along 
-      with the ERROR message, `suggested_fix` that aims to help the assistant 
+      plan execution FAILED, and your feedback should say INVALID along
+      with the ERROR message, `suggested_fix` that aims to help the assistant
       fix the problem (or simply equals "address the the error shown in feedback")
-    - Ask yourself, is the ANSWER in the expected form, e.g. 
+    - Ask yourself, is the ANSWER in the expected form, e.g.
         if the question is asking for the name of an ENTITY with max SIZE,
         then the answer should be the ENTITY name, NOT the SIZE!! 
     - If the ANSWER is in the expected form, then the QUERY PLAN is likely VALID,
@@ -168,7 +164,7 @@ class Neo4jQueryPlanAgent(ChatAgent):
         self.curr_query_plan: QueryPlan | None = None
         # how many times re-trying query plan in response to feedback:
         self.n_retries: int = 0
-        self.result: str = ""  # answer received from LanceRAG
+        self.result: str = ""  # answer received from Neo4jRAG
         # This agent should generate the QueryPlanTool
         # as well as handle it for validation
         self.enable_message(QueryPlanTool, use=True, handle=True)
@@ -185,7 +181,7 @@ class Neo4jQueryPlanAgent(ChatAgent):
             consisting of:
             -  a FILTER (can be empty string) that would help the ASSISTANT to answer the query.
                 Remember the FILTER can refer to ANY fields in the above SCHEMA
-                EXCEPT the `content` field of the documents. 
+                EXCEPT the `content` field of the documents.
                 ONLY USE A FILTER IF EXPLICITLY MENTIONED IN THE QUERY.
                 TO get good results, for STRING MATCHES, consider using LIKE instead of =, e.g.
                 "CEO LIKE '%Jobs%'" instead of "CEO = 'Steve Jobs'"
@@ -203,7 +199,7 @@ class Neo4jQueryPlanAgent(ChatAgent):
 
             You may receive FEEDBACK on your QUERY PLAN and received ANSWER,
             from the 'QueryPlanCritic' who may offer suggestions for
-            a better FILTER, REPHRASED QUERY, or DATAFRAME CALCULATION.
+            a better FILTER, REPHRASED QUERY.
 
             If you keep getting feedback or keep getting a {NO_ANSWER} from the assistant
             at least 3 times, then simply say '{DONE} {NO_ANSWER}' and nothing else.
