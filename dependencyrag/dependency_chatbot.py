@@ -51,8 +51,8 @@ from langroid.utils.configuration import set_global, Settings
 from langroid.agent.tool_message import ToolMessage
 from langroid.agent.tools.google_search_tool import GoogleSearchTool
 
-from langroid.agent.task import Task
 from cypher_message import CONSTRUCT_DEPENDENCY_GRAPH
+from critic_plan_task import Neo4jRAGTaskCreator
 
 app = typer.Typer()
 
@@ -332,18 +332,21 @@ def main(
     To display the dependency graph use this tool `visualize_dependency_graph`.
     4. Use the `vulnerability_check` tool to check for vulnerabilities in the package.
     """
-    task = Task(
-        dependency_agent,
-        name="DependencyAgent",
-        system_message=system_message,
-    )
+    # task = Task(
+    #     dependency_agent,
+    #     name="DependencyAgent",
+    #     system_message=system_message,
+    # )
 
-    dependency_agent.enable_message(DepGraphTool)
+    dependency_agent.enable_message(DepGraphTool, require_recipient=True)
     dependency_agent.enable_message(GoogleSearchTool)
     dependency_agent.enable_message(VisualizeGraph)
     dependency_agent.enable_message(VulnerabilityCheck)
 
-    task.run()
+    # dependency_agent.config.system_message = system_message
+
+    task = Neo4jRAGTaskCreator.new(dependency_agent, interactive=True)
+    task.run(system_message)
 
     # check if the user wants to delete the database
     if dependency_agent.config.database_created:
