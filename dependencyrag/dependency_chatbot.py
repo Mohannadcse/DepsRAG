@@ -27,6 +27,7 @@ python3 dependencyrag/dependency_chatbot.py
 ```
 """
 
+import os
 import typer
 import requests
 import json
@@ -46,7 +47,7 @@ from langroid.agent.special.neo4j.neo4j_chat_agent import (
 )
 from langroid.language_models.openai_gpt import OpenAIGPTConfig, OpenAIChatModel
 from langroid.language_models.azure_openai import AzureConfig
-from langroid.utils.constants import NO_ANSWER
+from langroid.utils.constants import NO_ANSWER, SEND_TO
 from langroid.utils.configuration import set_global, Settings
 from langroid.agent.tool_message import ToolMessage
 from langroid.agent.tools.google_search_tool import GoogleSearchTool
@@ -144,90 +145,94 @@ class DependencyGraphAgent(Neo4jChatAgent):
         # Query to fetch nodes and relationships
         # TODO: make this function more general to return customized graphs
         # i.e, displays paths or subgraphs
-        query = """
+        try:
+            query = """
             MATCH (n)
             OPTIONAL MATCH (n)-[r]->(m)
             RETURN n, r, m
-        """
+            """
 
-        query_result = self.read_query(query)
-        nt = Network(notebook=False, height="750px", width="100%", directed=True)
+            query_result = self.read_query(query)
+            nt = Network(notebook=False, height="750px", width="100%", directed=True)
 
-        node_set = set()  # To keep track of added nodes
+            node_set = set()  # To keep track of added nodes
 
-        for record in query_result.data:
-            # Process node 'n'
-            if "n" in record and record["n"] is not None:
-                node = record["n"]
-                # node_id = node.get("id", None)  # Assuming each node has a unique 'id'
-                node_label = node.get("name", "Unknown Node")
-                node_title = f"Version: {node.get('version', 'N/A')}"
-                node_color = "blue"
-                # if node.get("imported", False) else "green"
+            for record in query_result.data:
+                # Process node 'n'
+                if "n" in record and record["n"] is not None:
+                    node = record["n"]
+                    # node_id = node.get("id", None)  # Assuming each node has a unique 'id'
+                    node_label = node.get("name", "Unknown Node")
+                    node_title = f"Version: {node.get('version', 'N/A')}"
+                    node_color = "blue"
+                    # if node.get("imported", False) else "green"
 
-                # Check if node has been added before
-                if node_label not in node_set:
-                    nt.add_node(
-                        node_label, label=node_label, title=node_title, color=node_color
+                    # Check if node has been added before
+                    if node_label not in node_set:
+                        nt.add_node(
+                            node_label,
+                            label=node_label,
+                            title=node_title,
+                            color=node_color,
+                        )
+                        node_set.add(node_label)
+
+                # Process relationships and node 'm'
+                if (
+                    "r" in record
+                    and record["r"] is not None
+                    and "m" in record
+                    and record["m"] is not None
+                ):
+                    source = record["n"]
+                    target = record["m"]
+                    relationship = record["r"]
+
+                    source_label = source.get("name", "Unknown Node")
+                    target_label = target.get("name", "Unknown Node")
+                    relationship_label = (
+                        relationship[1]
+                        if isinstance(relationship, tuple) and len(relationship) > 1
+                        else "Unknown Relationship"
                     )
-                    node_set.add(node_label)
 
-            # Process relationships and node 'm'
-            if (
-                "r" in record
-                and record["r"] is not None
-                and "m" in record
-                and record["m"] is not None
-            ):
-                source = record["n"]
-                target = record["m"]
-                relationship = record["r"]
+                    # Ensure both source and target nodes are added before adding the edge
+                    if source_label not in node_set:
+                        source_title = f"Version: {source.get('version', 'N/A')}"
+                        source_color = "blue"
+                        nt.add_node(
+                            source_label,
+                            label=source_label,
+                            title=source_title,
+                            color=source_color,
+                        )
+                        node_set.add(source_label)
+                    if target_label not in node_set:
+                        target_title = f"Version: {target.get('version', 'N/A')}"
+                        target_color = "blue"
+                        nt.add_node(
+                            target_label,
+                            label=target_label,
+                            title=target_title,
+                            color=target_color,
+                        )
+                        node_set.add(target_label)
 
-                source_label = source.get("name", "Unknown Node")
-                target_label = target.get("name", "Unknown Node")
-                relationship_label = (
-                    relationship[1]
-                    if isinstance(relationship, tuple) and len(relationship) > 1
-                    else "Unknown Relationship"
-                )
+                    nt.add_edge(source_label, target_label, title=relationship_label)
 
-                # Ensure both source and target nodes are added before adding the edge
-                if source_label not in node_set:
-                    source_title = f"Version: {source.get('version', 'N/A')}"
-                    source_color = "blue"
-                    nt.add_node(
-                        source_label,
-                        label=source_label,
-                        title=source_title,
-                        color=source_color,
-                    )
-                    node_set.add(source_label)
-                if target_label not in node_set:
-                    target_title = f"Version: {target.get('version', 'N/A')}"
-                    target_color = "blue"
-                    nt.add_node(
-                        target_label,
-                        label=target_label,
-                        title=target_title,
-                        color=target_color,
-                    )
-                    node_set.add(target_label)
+                nt.options.edges.font = {"size": 12, "align": "top"}
+                nt.options.physics.enabled = True
+                nt.show_buttons(filter_=["physics"])
 
-                nt.add_edge(source_label, target_label, title=relationship_label)
+                output_file_path = "/app/html/neo4j_graph.html"
+                nt.write_html(output_file_path)
+                # Construct the host path using the environment variable
+                host_html_path = os.getenv("HOST_HTML_PATH", "/app/html")
+                abs_file_path = os.path.join(host_html_path, "neo4j_graph.html")
+                return f"file:///{abs_file_path}"
 
-        nt.options.edges.font = {"size": 12, "align": "top"}
-        nt.options.physics.enabled = True
-        nt.show_buttons(filter_=["physics"])
-
-        output_file_path = "neo4j_graph.html"
-        nt.write_html(output_file_path)
-
-        # Try to open the HTML file in a browser
-        try:
-            abs_file_path = str(Path(output_file_path).resolve())
-            webbrowser.open("file://" + abs_file_path, new=2)
         except Exception as e:
-            print(f"Failed to automatically open the graph in a browser: {e}")
+            return f"Failed to create visualization: {str(e)}"
 
     def vulnerability_check(self, msg: VulnerabilityCheck) -> str:
         if msg.package_type.lower() == "pypi":
@@ -299,6 +304,7 @@ def main(
             use_tools=tools,
             use_functions_api=not tools,
             llm=llm,
+            addressing_prefix=SEND_TO,
         ),
     )
 
@@ -336,6 +342,7 @@ def main(
         dependency_agent,
         name="DependencyAgent",
         system_message=system_message,
+        interactive=False,
     )
 
     dependency_agent.enable_message(DepGraphTool)
