@@ -283,7 +283,7 @@ def main(
     # )
     print(
         """
-        [blue]Welcome to Dependency Analysis chatbot!
+        [blue]Welcome to DepsRAG Analysis chatbot!
         Enter x or q to quit at any point.
         """
     )

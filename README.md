@@ -7,8 +7,8 @@
 
 # DepsRAG
 
-`DepsRAG` is a chatbot that answers user's questions about software dependency knowledge graphs. `DepsRAG` offers the following features:
-- Constructing the software dependencies (direct and transitive) as knolwedge graphs
+`DepsRAG` is a chatbot that answers user's questions about software dependencies after representing them as a Knowledge Graph (KG). `DepsRAG` offers the following features:
+- Constructing the software dependencies (direct and transitive) as a KG.
 - Supporting 4 popular software ecosystems (i.e. PyPI, NPM, Cargo, and Go). 
 - Generatiing atutomatically Cypher queries to retrieve information from the KG.
 - Augmenting users' questions with the retrieved information.
@@ -38,6 +38,9 @@ used here for illustration purposes, but of course you can use other names):
 <details>
 <summary> <b>Click to expand</b></summary>
 
+- **July 2024:** 
+  - Creating containerized version of DepsRAG that support UI and CLI mode.
+
 - **May 2024:** 
   - Adding integration with [OSV](https://osv.dev/) vulnerability database to search for 
   vulnerabilities
@@ -53,33 +56,12 @@ used here for illustration purposes, but of course you can use other names):
 
 </details>
 
-## Requirements:
 
-This example relies on the `neo4j` Database. The easiest way to get access to neo4j is
-by creating a cloud account at [Neo4j Aura](https://neo4j.com/cloud/platform/aura-graph-database/). OR you
-can use Neo4j Docker image using this command:
+# DepsRAG Architecture
 
-```bash
-docker run --rm \
-    --name neo4j \
-    -p 7474:7474 -p 7687:7687 \
-    -e NEO4J_AUTH=neo4j/password \
-    neo4j:latest
-```
-
-Upon creating the account successfully, neo4j will create a text file contains
-account settings, please provide the following information (uri, username,
-password, and database), while creating the constructor `Neo4jChatAgentConfig`. 
-These settings can be set inside the `.env` file as shown in [`.env-template`](.env-template)
-
-
-## Architecture of DepsRAG
-
-This example uses a `DependencyGraphAgent` 
+DepsRAG uses a `DependencyGraphAgent` 
 (derived from [`Neo4jChatAgent`](https://github.com/langroid/langroid/blob/main/langroid/agent/special/neo4j/neo4j_chat_agent.py)).
-It auto-generates a `neo4j` knowledge-graph based on the dependency
-structure of a given `PyPi` package. You can then ask the chatbot questions
-about the dependency graph. This agent uses two tools in addition to those 
+It automatically generates KG representation based on the dependency structure of a given software package. You can then ask the chatbot questions about the dependency graph. This agent uses two tools in addition to those 
 already available to `Neo4jChatAgent`:
 
 - DepGraphTool to build the dependency graph for a given pkg version, using the API
@@ -98,9 +80,28 @@ The `Neo4jChatAgent` has access to these tools/function-calls:
    Neo4j knowledge-graph (Cypher is the query language for Neo4j)
 - `VulnerabilityCheck`: search OSV vulnerability DB based on package name, version, and 
 its ecosystem.
-- `VisualizeGraph`: visualize the dependency grpah
+- `VisualizeGraph`: visualize the entire dependency grpah
 
-### Running the example
+## Requirements:
+
+DepsRAG leverages `neo4j` for storing the KG that represents depdendencies in a given package. The easiest way to get access to neo4j is
+by creating a cloud account at [Neo4j Aura](https://neo4j.com/cloud/platform/aura-graph-database/). OR you
+can use Neo4j Docker image using this command:
+
+```bash
+docker run --rm \
+    --name neo4j \
+    -p 7474:7474 -p 7687:7687 \
+    -e NEO4J_AUTH=neo4j/password \
+    neo4j:latest
+```
+
+Upon creating the account successfully, neo4j will create a text file contains
+account settings, please provide the following information (uri, username,
+password, and database), while creating the constructor `Neo4jChatAgentConfig`. 
+These settings can be set inside the `.env` file as shown in [`.env-template`](.env-template)
+
+## Running DepsRAG
 
 Run like this:
 ```
@@ -122,7 +123,26 @@ Here is a recording shows the example in action:
 **NOTE:** the dependency graph is constructed based
 on [DepsDev API](https://deps.dev/). Therefore, the Chatbot will not be able to
 construct the dependency graph if this API doesn't provide dependency metadata
-infromation. 
+infromation.
+
+# :whale: Docker Instructions
+
+We provide a containerized version of `DepsRAG`, where you can run `DepsRAG` using
+ `Chainlit` in UI mode or CLI mode.  
+All you need to do is set up environment variables in the `.env`
+ (as shown in [`.env-template`](.env-template)) file after clonning `DepsRAG` repository.
+We created ths script [`run_depsrag_docker.sh`](run_depsrag_docker.sh). So everything
+ will be working in an automated manner. Once you run this script, it will ask you to
+ select the mode for running `DepsRAG`. Then you can interact with `DepsRAG` chatbot. 
+
+```bash
+cd <DepsRAG Repo>
+docker compose build
+chmod +x run_depsrag_docker.sh
+./run_depsrag_docker.sh
+```
+After finishing the interaction with `DepsRAG` chatbot, you can run the command
+ `docker compose down`.
 
 # DepsRAG Paper Citation
 

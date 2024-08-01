@@ -1,8 +1,8 @@
 #!/bin/bash
 
-echo APP_MODE=$APP_MODE
+echo DEPSRAG_MODE=$DEPSRAG_MODE
 
-if [ "$APP_MODE" = "cli" ]; then
+if [ "$DEPSRAG_MODE" = "cli" ]; then
   echo "Starting Dependency Chatbot in CLI mode..."
   python dependencyrag/dependency_chatbot.py
 else
