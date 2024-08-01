@@ -14,6 +14,9 @@ The requirements are described in
 """
 
 import typer
+import requests
+import json
+import os
 from rich import print
 
 from pyvis.network import Network
@@ -36,7 +39,7 @@ from langroid.agent.special.neo4j.neo4j_chat_agent import (
     Neo4jChatAgentConfig,
     Neo4jSettings,
 )
-from langroid.utils.constants import NO_ANSWER
+from langroid.utils.constants import NO_ANSWER, SEND_TO
 from langroid.utils.configuration import set_global, Settings
 from langroid.agent.tool_message import ToolMessage
 from langroid.agent.tools.google_search_tool import GoogleSearchTool
@@ -45,6 +48,17 @@ from langroid.agent.task import Task
 from dependencyrag.cypher_message import CONSTRUCT_DEPENDENCY_GRAPH
 
 app = typer.Typer()
+
+
+class VulnerabilityCheck(ToolMessage):
+    request = "vulnerability_check"
+    purpose = """
+      Use this tool/function to check for vulnerabilities based on the provided
+      <package_version>, <package_type>, and <package_name>.
+      """
+    package_version: str
+    package_type: str
+    package_name: str
 
 
 class DepGraphTool(ToolMessage):
@@ -84,10 +98,21 @@ class DependencyGraphAgent(Neo4jChatAgent):
             # self.config.database_created = True
             return "Database Exists"
         else:
+            if msg.package_type.lower() == "npm":
+                package_type_system = "NPM"
+            elif msg.package_type.lower() == "pypi":
+                package_type_system = "PyPi"
+            elif msg.package_type.lower() == "go":
+                package_type_system = "GO"
+            elif msg.package_type.lower() == "cargo":
+                package_type_system = "CARGO"
+            else:
+                package_type_system = ""
             construct_dependency_graph = CONSTRUCT_DEPENDENCY_GRAPH.format(
                 package_type=msg.package_type.lower(),
                 package_name=msg.package_name,
                 package_version=msg.package_version,
+                package_type_system=package_type_system,
             )
             response = self.write_query(construct_dependency_graph)
             if response.success:
@@ -112,89 +137,119 @@ class DependencyGraphAgent(Neo4jChatAgent):
         # Query to fetch nodes and relationships
         # TODO: make this function more general to return customized graphs
         # i.e, displays paths or subgraphs
-        query = """
+        try:
+            query = """
             MATCH (n)
             OPTIONAL MATCH (n)-[r]->(m)
             RETURN n, r, m
-        """
+            """
 
-        query_result = self.read_query(query)
-        nt = Network(notebook=False, height="750px", width="100%", directed=True)
+            query_result = self.read_query(query)
+            nt = Network(notebook=False, height="750px", width="100%", directed=True)
 
-        node_set = set()  # To keep track of added nodes
+            node_set = set()  # To keep track of added nodes
 
-        for record in query_result.data:
-            # Process node 'n'
-            if "n" in record and record["n"] is not None:
-                node = record["n"]
-                # node_id = node.get("id", None)  # Assuming each node has a unique 'id'
-                node_label = node.get("name", "Unknown Node")
-                node_title = f"Version: {node.get('version', 'N/A')}"
-                node_color = "blue" if node.get("imported", False) else "green"
+            for record in query_result.data:
+                # Process node 'n'
+                if "n" in record and record["n"] is not None:
+                    node = record["n"]
+                    # node_id = node.get("id", None)  # Assuming each node has a unique 'id'
+                    node_label = node.get("name", "Unknown Node")
+                    node_title = f"Version: {node.get('version', 'N/A')}"
+                    node_color = "blue"
+                    # if node.get("imported", False) else "green"
 
-                # Check if node has been added before
-                if node_label not in node_set:
-                    nt.add_node(
-                        node_label, label=node_label, title=node_title, color=node_color
+                    # Check if node has been added before
+                    if node_label not in node_set:
+                        nt.add_node(
+                            node_label,
+                            label=node_label,
+                            title=node_title,
+                            color=node_color,
+                        )
+                        node_set.add(node_label)
+
+                # Process relationships and node 'm'
+                if (
+                    "r" in record
+                    and record["r"] is not None
+                    and "m" in record
+                    and record["m"] is not None
+                ):
+                    source = record["n"]
+                    target = record["m"]
+                    relationship = record["r"]
+
+                    source_label = source.get("name", "Unknown Node")
+                    target_label = target.get("name", "Unknown Node")
+                    relationship_label = (
+                        relationship[1]
+                        if isinstance(relationship, tuple) and len(relationship) > 1
+                        else "Unknown Relationship"
                     )
-                    node_set.add(node_label)
 
-            # Process relationships and node 'm'
-            if (
-                "r" in record
-                and record["r"] is not None
-                and "m" in record
-                and record["m"] is not None
-            ):
-                source = record["n"]
-                target = record["m"]
-                relationship = record["r"]
+                    # Ensure both source and target nodes are added before adding the edge
+                    if source_label not in node_set:
+                        source_title = f"Version: {source.get('version', 'N/A')}"
+                        source_color = "blue"
+                        nt.add_node(
+                            source_label,
+                            label=source_label,
+                            title=source_title,
+                            color=source_color,
+                        )
+                        node_set.add(source_label)
+                    if target_label not in node_set:
+                        target_title = f"Version: {target.get('version', 'N/A')}"
+                        target_color = "blue"
+                        nt.add_node(
+                            target_label,
+                            label=target_label,
+                            title=target_title,
+                            color=target_color,
+                        )
+                        node_set.add(target_label)
 
-                source_label = source.get("name", "Unknown Node")
-                target_label = target.get("name", "Unknown Node")
-                relationship_label = (
-                    relationship[1]
-                    if isinstance(relationship, tuple) and len(relationship) > 1
-                    else "Unknown Relationship"
-                )
+                    nt.add_edge(source_label, target_label, title=relationship_label)
 
-                # Ensure both source and target nodes are added before adding the edge
-                if source_label not in node_set:
-                    source_title = f"Version: {source.get('version', 'N/A')}"
-                    source_color = "blue" if source.get("imported", False) else "green"
-                    nt.add_node(
-                        source_label,
-                        label=source_label,
-                        title=source_title,
-                        color=source_color,
-                    )
-                    node_set.add(source_label)
-                if target_label not in node_set:
-                    target_title = f"Version: {target.get('version', 'N/A')}"
-                    target_color = "blue" if target.get("imported", False) else "green"
-                    nt.add_node(
-                        target_label,
-                        label=target_label,
-                        title=target_title,
-                        color=target_color,
-                    )
-                    node_set.add(target_label)
+            nt.options.edges.font = {"size": 12, "align": "top"}
+            nt.options.physics.enabled = True
+            nt.show_buttons(filter_=["physics"])
 
-                nt.add_edge(source_label, target_label, title=relationship_label)
+            output_file_path = "/app/html/neo4j_graph.html"
+            nt.write_html(output_file_path)
+            # Construct the host path using the environment variable
+            host_html_path = os.getenv("HOST_HTML_PATH", "/app/html")
+            abs_file_path = os.path.join(host_html_path, "neo4j_graph.html")
+            return f"file:///{abs_file_path}"
 
-        nt.options.edges.font = {"size": 12, "align": "top"}
-        nt.options.physics.enabled = True
-        nt.show_buttons(filter_=["physics"])
-
-        output_file_path = "neo4j_graph.html"
-        nt.write_html(output_file_path)
-
-        # Try to open the HTML file in a browser
-        try:
-            abs_file_path = str(Path(output_file_path).resolve())
-            webbrowser.open("file://" + abs_file_path, new=2)
         except Exception as e:
-            print(f"Failed to automatically open the graph in a browser: {e}")
+            return f"Failed to create visualization: {str(e)}"
+
+    def vulnerability_check(self, msg: VulnerabilityCheck) -> str:
+        if msg.package_type.lower() == "pypi":
+            ecosystem = "PyPI"
+        # Data payload
+        data = {
+            "version": msg.package_version,
+            "package": {"name": msg.package_name, "ecosystem": ecosystem},
+        }
+
+        # URL
+        url = "https://api.osv.dev/v1/query"
+
+        # Send POST request
+        response = requests.post(url, data=json.dumps(data))
+        response_data = response.json()
+        if "vulns" in response_data:
+            for vuln in response_data["vulns"]:
+                if "references" in vuln:
+                    del vuln["references"]
+                if "affected" in vuln:
+                    for affected in vuln["affected"]:
+                        if "versions" in affected:
+                            del affected["versions"]
+        return json.dumps(response_data, indent=4)
 
 
 async def setup_agent_task():
@@ -218,37 +273,39 @@ async def setup_agent_task():
             neo4j_settings=neo4j_settings,
             show_stats=False,
             llm=llm_config,
+            addressing_prefix=SEND_TO,
         ),
     )
 
     system_message = f"""You are an expert in Dependency graphs and analyzing them using
-    Neo4j. 
-    
+    Neo4j.
+
     FIRST, I'll give you the name of the package that I want to analyze.
-    
+
     THEN, you can also use the `web_search` tool/function to find out information about a package,
-      such as version number and package type (PyPi or not). 
-    
+      such as version number and package type (PyPi, NPM, Cargo, or GO).
+
     If unable to get this info, you can ask me and I can tell you.
-    
-    DON'T forget to include the package name in your questions. 
-      
+
+    DON'T forget to include the package name in your questions.
+
     After receiving this information, make sure the package version is a number and the
-    package type is PyPi.
+    package type.
     THEN ask the user if they want to construct the dependency graph,
     and if so, use the tool/function `construct_dependency_graph` to construct
       the dependency graph. Otherwise, say `Couldn't retrieve package type or version`
       and {NO_ANSWER}.
-    After constructing the dependency graph successfully, you will have access to Neo4j 
+    After constructing the dependency graph successfully, you will have access to Neo4j
     graph database, which contains dependency graph.
     You will try your best to answer my questions. Note that:
     1. You can use the tool `get_schema` to get node label and relationships in the
-    dependency graph. 
+    dependency graph.
     2. You can use the tool `retrieval_query` to get relevant information from the
       graph database. I will execute this query and send you back the result.
       Make sure your queries comply with the database schema.
     3. Use the `web_search` tool/function to get information if needed.
     To display the dependency graph use this tool `visualize_dependency_graph`.
+    4. Use the `vulnerability_check` tool to check for vulnerabilities in the package.
     """
     task = Task(
         dependency_agent,
@@ -259,6 +316,7 @@ async def setup_agent_task():
     dependency_agent.enable_message(DepGraphTool)
     dependency_agent.enable_message(GoogleSearchTool)
     dependency_agent.enable_message(VisualizeGraph)
+    dependency_agent.enable_message(VulnerabilityCheck)
 
     cl.user_session.set("dependency_agent", dependency_agent)
     cl.user_session.set("task", task)

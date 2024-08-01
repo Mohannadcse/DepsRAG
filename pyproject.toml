@@ -8,9 +8,10 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = ">=3.11,<3.12"
-langroid = "^0.1.230"
+langroid = ">=0.1.230"
 neo4j = "^5.18.0"
 pyvis = "^0.3.2"
+chainlit = "1.1.202"
 
 
 [build-system]
