@@ -103,21 +103,23 @@ These settings can be set inside the `.env` file as shown in [`.env-template`](.
 
 ## Running DepsRAG
 
-Run like this:
+`DepsRAG` supports two modes: CLI and UI (using `chainlit`).
+
+Run `DepsRAG` in the CLI mode using this command:
 ```
 python3 dependencyrag/dependency_chatbot.py
 ```
 
-Here is a recording shows the example in action:
+Here is a recording shows the CLI mode in action:
 ![Demo](docs/dependency_chatbot.gif)
 
 
-Run the UI version like this:
+Run `DepsRAG` in the UI mode using this command:
 ```
 chainlit run dependencyrag/chainlit/chainlit_dependency_chatbot.py
 ```
 
-Here is a recording shows the example in action:
+Here is a recording shows the UI moded in action:
 ![Demo](docs/chainlit_dependency_chatbot.gif)
 
 **NOTE:** the dependency graph is constructed based
@@ -141,8 +143,9 @@ docker compose build
 chmod +x run_depsrag_docker.sh
 ./run_depsrag_docker.sh
 ```
+The script `run_depsrag_docker.sh` spins up two containers: Neo4j and `DepsRAG` app.
 After finishing the interaction with `DepsRAG` chatbot, you can run the command
- `docker compose down`.
+ `docker compose down` to shut down the containers.
 
 # DepsRAG Paper Citation
 
