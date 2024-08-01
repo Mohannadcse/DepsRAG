@@ -13,6 +13,26 @@
 - Generatiing atutomatically Cypher queries to retrieve information from the KG.
 - Augmenting users' questions with the retrieved information.
 
+## DepsRAG Architecture
+
+DepsRAG uses the following set of tools to accomplish its process:
+
+- `DepGraphTool` to build the dependency graph for a given pkg version, using the API
+   at [DepsDev](https://deps.dev/)
+- `GoogleSearchTool` to find package version and type information. It also can answer
+other question from the web about other aspects after obtaining the intended information
+from the dependency graph. For examples:
+  - does the dpendency use latest version for this package verion?
+  - Can I upgrade this package in the dependency graph?
+- `GraphSchemaTool`: get schema of Neo4j knowledge-graph
+- `CypherRetrievalTool`: generate cypher queries to get information from
+   Neo4j knowledge-graph (Cypher is the query language for Neo4j)
+- `VulnerabilityCheck`: search OSV vulnerability DB based on package name, version, and 
+its ecosystem.
+- `VisualizeGraph`: visualize the entire dependency grpah
+
+## DepsRAG Workflow
+
 The workflow of `DepsRAG` as follows: 
 - The chatbot will ask you to provide the name and ecosystem of the software package.
 - It will then the tool `GoogleSearchTool` to get the version of this package (you can skip this process by providing the intended version).
@@ -57,34 +77,47 @@ used here for illustration purposes, but of course you can use other names):
 </details>
 
 
-# DepsRAG Architecture
+# :gear: Installation and Setup
+DepsRAG requires Python 3.11+. We recommend using a virtual environment.
 
-DepsRAG uses a `DependencyGraphAgent` 
-(derived from [`Neo4jChatAgent`](https://github.com/langroid/langroid/blob/main/langroid/agent/special/neo4j/neo4j_chat_agent.py)).
-It automatically generates KG representation based on the dependency structure of a given software package. You can then ask the chatbot questions about the dependency graph. This agent uses two tools in addition to those 
-already available to `Neo4jChatAgent`:
+```bash
+# clone the repo and cd into repo root
+git clone https://github.com/Mohannadcse/DepsRAG.git
+cd DepsRAG
 
-- DepGraphTool to build the dependency graph for a given pkg version, using the API
-   at [DepsDev](https://deps.dev/)
-- GoogleSearchTool to find package version and type information. It also can answer
-other question from the web about other aspects after obtaining the intended information
-from the dependency graph. For examples:
-  - Is this package/version vulnerable?
-  - does the dpendency use latest version for this package verion?
-  - Can I upgrade this package in the dependency graph?
+# create a virtual env under project root, .venv directory
+python3 -m venv .venv
 
-The `Neo4jChatAgent` has access to these tools/function-calls:
+# activate the virtual env
+. .venv/bin/activate
 
-- `GraphSchemaTool`: get schema of Neo4j knowledge-graph
-- `CypherRetrievalTool`: generate cypher queries to get information from
-   Neo4j knowledge-graph (Cypher is the query language for Neo4j)
-- `VulnerabilityCheck`: search OSV vulnerability DB based on package name, version, and 
-its ecosystem.
-- `VisualizeGraph`: visualize the entire dependency grpah
+# install dependencies from pyproject.toml:
+# This installs DepsRAG
+poetry install 
+```
 
-## Requirements:
+## Set up environment variables (API keys, etc)
 
-DepsRAG leverages `neo4j` for storing the KG that represents depdendencies in a given package. The easiest way to get access to neo4j is
+`DepsRAG` requires a set of environment variables to operate. In the root of the repo, copy the [`.env-template`](.env-template) file to a new file `.env` to set the values of these environment variables.
+
+```
+cp .env-template .env
+```
+
+Following is a description of these environment variables:
+
+- **LLM Settings:** by default `DepsRAG` support OpenAI model `gpt-4o`. Therefore, `DepsRAG` requires `OPENAI_API_KEY=your-key-here-without-quotes`. However, `DepsRAG` supports other models that are enabled by `Langroid` like [Azure](https://github.com/langroid/langroid?tab=readme-ov-file#set-up-environment-variables-api-keys-etc), [Open/Local LLMs](https://langroid.github.io/langroid/tutorials/local-llm-setup/), and other [non-OpenAI](https://langroid.github.io/langroid/tutorials/non-openai-llms/) proprietary LLMs. Therefore, you need to provide the corresponding environment settings for the required LLM. For example, Azure settings required are listed inside [`.env-template`](.env-template) and start with `AZURE_`.
+
+- **Google Custom Search API Credentials:** Only needed to enable an Agent to use the `GoogleSearchTool`.
+  To use Google Search as an LLM Tool//function-call, 
+  you'll need to set up 
+  [a Google API key](https://developers.google.com/custom-search/v1/introduction#identify_your_application_to_google_with_api_key),
+  then [setup a Google Custom Search Engine (CSE) and get the CSE ID](https://developers.google.com/custom-search/docs/tutorial/creatingcse).
+  (Documentation for these can be challenging, we suggest asking GPT4 for a step-by-step guide.)
+  After obtaining these credentials, store them as values of 
+  `GOOGLE_API_KEY` and `GOOGLE_CSE_ID` in your `.env` file. 
+
+- **Neo4j:** The easiest way to get access to neo4j is
 by creating a cloud account at [Neo4j Aura](https://neo4j.com/cloud/platform/aura-graph-database/). OR you
 can use Neo4j Docker image using this command:
 
@@ -96,19 +129,48 @@ docker run --rm \
     neo4j:latest
 ```
 
-Upon creating the account successfully, neo4j will create a text file contains
-account settings, please provide the following information (uri, username,
-password, and database), while creating the constructor `Neo4jChatAgentConfig`. 
-These settings can be set inside the `.env` file as shown in [`.env-template`](.env-template)
+Upon creating the cloud account successfully, neo4j will create a text file contains
+account settings. Please provide the following Neo4j environment variables: 
 
-## Running DepsRAG
+```
+NEO4J_USERNAME=typically neo4j
+NEO4J_PASSWORD=your-neo4j-password
+NEO4J_URI=uri-to-access-neo4j-dayabase OR bolt://neo4j:7687 if you use Neo4j Docker image
+NEO4J_DATABASE=typically neo4j
+```
+
+## :whale: Docker Instructions
+
+We provide a containerized version of `DepsRAG`, where you can run `DepsRAG` using
+ `Chainlit` in UI mode or CLI mode.  
+All you need to do is set up environment variables in the `.env`
+ (as shown in [`.env-template`](.env-template)) file after clonning `DepsRAG` repository.
+We created ths script [`run_depsrag_docker.sh`](run_depsrag_docker.sh). So everything
+ will be working in an automated manner. Once you run this script, it will ask you to
+ select the mode for running `DepsRAG`. Then you can interact with `DepsRAG` chatbot. 
+
+```bash
+git clone https://github.com/Mohannadcse/DepsRAG.
+cd DepsRAG
+docker compose build
+chmod +x run_depsrag_docker.sh
+./run_depsrag_docker.sh
+```
+The script `run_depsrag_docker.sh` spins up two containers: Neo4j and `DepsRAG` app.
+After finishing the interaction with `DepsRAG` chatbot, you can run the command
+ `docker compose down` to shut down the containers.
+
+# Running DepsRAG
 
 `DepsRAG` supports two modes: CLI and UI (using `chainlit`).
 
 Run `DepsRAG` in the CLI mode using this command:
 ```
 python3 dependencyrag/dependency_chatbot.py
+ -m <LLM-Name>
 ```
+
+The flag `-m` provides the option to overwrite the default LLM (`gpt-4o`) used by `DepsRAG`. If you want to use Azure, set the flag `-m azure`, while for other LLMs, please check Langroid documentation ([Open/Local LLMs](https://langroid.github.io/langroid/tutorials/local-llm-setup/) and other [non-OpenAI](https://langroid.github.io/langroid/tutorials/non-openai-llms/) proprietary LLMs).
 
 Here is a recording shows the CLI mode in action:
 ![Demo](docs/dependency_chatbot.gif)
@@ -127,25 +189,6 @@ on [DepsDev API](https://deps.dev/). Therefore, the Chatbot will not be able to
 construct the dependency graph if this API doesn't provide dependency metadata
 infromation.
 
-# :whale: Docker Instructions
-
-We provide a containerized version of `DepsRAG`, where you can run `DepsRAG` using
- `Chainlit` in UI mode or CLI mode.  
-All you need to do is set up environment variables in the `.env`
- (as shown in [`.env-template`](.env-template)) file after clonning `DepsRAG` repository.
-We created ths script [`run_depsrag_docker.sh`](run_depsrag_docker.sh). So everything
- will be working in an automated manner. Once you run this script, it will ask you to
- select the mode for running `DepsRAG`. Then you can interact with `DepsRAG` chatbot. 
-
-```bash
-cd <DepsRAG Repo>
-docker compose build
-chmod +x run_depsrag_docker.sh
-./run_depsrag_docker.sh
-```
-The script `run_depsrag_docker.sh` spins up two containers: Neo4j and `DepsRAG` app.
-After finishing the interaction with `DepsRAG` chatbot, you can run the command
- `docker compose down` to shut down the containers.
 
 # DepsRAG Paper Citation
 

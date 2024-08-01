@@ -293,9 +293,12 @@ def main(
     neo4j_settings = Neo4jSettings()
 
     if model:
-        llm = OpenAIGPTConfig(chat_model=model or OpenAIChatModel.GPT4o)
+        if model.lower() == "azure":
+            llm = AzureConfig()
+        else:
+            llm = OpenAIGPTConfig(chat_model=model)
     else:
-        llm = AzureConfig()
+        llm = OpenAIGPTConfig(chat_model=OpenAIChatModel.GPT4o)
 
     dependency_agent = DependencyGraphAgent(
         config=Neo4jChatAgentConfig(
