@@ -58,6 +58,9 @@ used here for illustration purposes, but of course you can use other names):
 <details>
 <summary> <b>Click to expand</b></summary>
 
+- **Aug 2024:** 
+  - Adding DuckDuck web search tool.
+
 - **July 2024:** 
   - Creating containerized version of DepsRAG that support UI and CLI mode.
 
