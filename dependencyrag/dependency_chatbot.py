@@ -51,6 +51,7 @@ from langroid.utils.constants import NO_ANSWER, SEND_TO
 from langroid.utils.configuration import set_global, Settings
 from langroid.agent.tool_message import ToolMessage
 from langroid.agent.tools.google_search_tool import GoogleSearchTool
+from langroid.agent.tools.duckduckgo_search_tool import DuckduckgoSearchTool
 
 from langroid.agent.task import Task
 from cypher_message import CONSTRUCT_DEPENDENCY_GRAPH
@@ -268,6 +269,12 @@ def main(
         False, "--tools", "-t", help="use langroid tools instead of function-calling"
     ),
     nocache: bool = typer.Option(False, "--nocache", "-nc", help="don't use cache"),
+    provider: str = typer.Option(
+        "ddg",
+        "--provider",
+        "-p",
+        help="search provider name (google, ddg)",
+    ),
 ) -> None:
     set_global(
         Settings(
@@ -300,6 +307,16 @@ def main(
     else:
         llm = OpenAIGPTConfig(chat_model=OpenAIChatModel.GPT4o)
 
+    match provider:
+        case "google":
+            search_tool_class = GoogleSearchTool
+        case "ddg":
+            search_tool_class = DuckduckgoSearchTool
+        case _:
+            raise ValueError(f"Unsupported provider {provider} specified.")
+
+    search_tool_handler_method = search_tool_class.default_value("request")
+
     dependency_agent = DependencyGraphAgent(
         config=Neo4jChatAgentConfig(
             neo4j_settings=neo4j_settings,
@@ -316,7 +333,7 @@ def main(
 
     FIRST, I'll give you the name of the package that I want to analyze.
 
-    THEN, you can also use the `web_search` tool/function to find out information about a package,
+    THEN, you can also use the `{search_tool_handler_method}` tool/function to find out information about a package,
       such as version number and package type (PyPi, NPM, Cargo, or GO).
 
     If unable to get this info, you can ask me and I can tell you.
@@ -337,7 +354,7 @@ def main(
     2. You can use the tool `retrieval_query` to get relevant information from the
       graph database. I will execute this query and send you back the result.
       Make sure your queries comply with the database schema.
-    3. Use the `web_search` tool/function to get information if needed.
+    3. Use the `{search_tool_handler_method}` tool/function to get information if needed.
     To display the dependency graph use this tool `visualize_dependency_graph`.
     4. Use the `vulnerability_check` tool to check for vulnerabilities in the package.
     """
@@ -349,7 +366,7 @@ def main(
     )
 
     dependency_agent.enable_message(DepGraphTool)
-    dependency_agent.enable_message(GoogleSearchTool)
+    dependency_agent.enable_message(search_tool_class)
     dependency_agent.enable_message(VisualizeGraph)
     dependency_agent.enable_message(VulnerabilityCheck)
 
