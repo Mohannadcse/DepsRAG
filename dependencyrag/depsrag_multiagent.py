@@ -186,8 +186,6 @@ def main(
     else:
         llm = lm.OpenAIGPTConfig(chat_model=lm.OpenAIChatModel.GPT4o)
 
-    llm = lm.azure_openai.AzureConfig()
-
     match provider:
         case "google":
             search_tool_class = GoogleSearchTool
