@@ -53,8 +53,6 @@ from langroid.agent.tools.orchestration import (
     ForwardTool,
     SendTool,
     AgentDoneTool,
-    PassTool,
-    ResultTool,
 )
 from langroid.agent.special.neo4j.neo4j_chat_agent import (
     Neo4jChatAgentConfig,
@@ -96,8 +94,9 @@ class AssistantAgent(lr.ChatAgent):
         # tools
         self.expecting_search_answer: bool = False
         self.original_query: str | None = None  # user's original query
+        # indicates the dependency graph is constructed
         self.done_construct_graph: bool = False
-        self.accept_new_question: bool = False
+        self.accept_new_question: bool = False  # allows the user to ask questions
 
     def handle_message_fallback(
         self, msg: str | ChatDocument
@@ -145,8 +144,8 @@ class AssistantAgent(lr.ChatAgent):
         self.done_construct_graph = True
         self.original_query = None  # reset the query
         self.accept_new_question = True
-        msg = f"""{msg.answer} Now you can take user's questions? by addressing the "User" using {AT}User"""
-        # by addressing the "User" using {AT}User
+        msg = f"""{msg.answer} Now you can take user's questions? by addressing the
+        "User" using {AT}User"""
         return super().llm_response_forget(msg)
 
     def final_answer_tool(self, msg: FinalAnswerTool) -> ForwardTool | str:
@@ -163,7 +162,6 @@ class AssistantAgent(lr.ChatAgent):
         msg = super().user_response("Please ask your question")
         self.accept_new_question = False
         self.original_query = None
-        # self.expecting_question_tool = True
         return msg
 
     def feedback_tool(self, msg: FeedbackTool) -> str:
@@ -254,6 +252,7 @@ class RetrieverAgent(lr.ChatAgent):
     ) -> Optional[ChatDocument]:
         if self.expecting_search_results:
             # message must be search results from the web search tool,
+            # vulnerability tool, or graph database.
             # so let the LLM compose a response based on the search results
 
             curr_query = self.curr_query
@@ -364,7 +363,7 @@ def main(
             llm = lm.OpenAIGPTConfig(chat_model=model)
     else:
         llm = lm.OpenAIGPTConfig(chat_model=lm.OpenAIChatModel.GPT4o)
-    llm = lm.azure_openai.AzureConfig()
+
     match provider:
         case "google":
             search_tool_class = GoogleSearchTool
@@ -434,7 +433,7 @@ def main(
             use_tools=tools,
             use_functions_api=not tools,
             llm=llm,
-            system_message=f"""You are an expert in retreiving information about
+            system_message="""You are an expert in retreiving information about
              security vulnerabilitiy for packages and performing web search.
             - Use the tool/function `vulnerability_check` to retrieve vulnerabilitiy
              information about the provided package name and package version.
@@ -478,7 +477,6 @@ def main(
     dependency_agent.enable_message(AnswerTool, use=False, handle=True)
     dependency_agent.enable_message(AnswerToolGraphConstruction, use=False, handle=True)
 
-    # assistant_agent.enable_message(SendTool, use=True, handle=True)
     assistant_agent.enable_message(QuestionTool, use=True, handle=True)
     assistant_agent.enable_message(ConstructDepsGraphTool, use=True, handle=True)
     assistant_agent.enable_message(FinalAnswerTool)
@@ -486,7 +484,6 @@ def main(
     assistant_agent.enable_message(AnswerTool, use=False, handle=True)  #
     assistant_agent.enable_message(AnswerToolGraphConstruction, use=False, handle=True)
     assistant_agent.enable_message(AskNewQuestionTool, use=False, handle=True)
-    # assistant_agent.enable_message(PassTool)
 
     critic_agent.enable_message(FeedbackTool)
     critic_agent.enable_message(FinalAnswerTool, use=False, handle=True)
@@ -503,7 +500,6 @@ def main(
         interactive=False,
         llm_delegate=True,
         single_round=False,
-        # done_if_response=[lr.Entity.AGENT]
     )
 
     assistant_task = lr.Task(
