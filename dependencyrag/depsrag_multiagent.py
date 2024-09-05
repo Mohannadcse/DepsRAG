@@ -44,6 +44,7 @@ python3 dependencyrag/depsrag_multiagent.py
 import typer
 
 from dotenv import load_dotenv
+from typing import Optional
 
 import langroid as lr
 from langroid import ChatDocument
@@ -51,6 +52,9 @@ import langroid.language_models as lm
 from langroid.agent.tools.orchestration import (
     ForwardTool,
     SendTool,
+    AgentDoneTool,
+    PassTool,
+    ResultTool,
 )
 from langroid.agent.special.neo4j.neo4j_chat_agent import (
     Neo4jChatAgentConfig,
@@ -61,6 +65,7 @@ from langroid.agent.special.neo4j.neo4j_chat_agent import (
 from langroid.agent.tools.google_search_tool import GoogleSearchTool
 from langroid.agent.tools.duckduckgo_search_tool import DuckduckgoSearchTool
 from langroid.utils.configuration import set_global, Settings
+from langroid.utils.constants import AT
 
 from dependencyrag.dependency_agent import DependencyGraphAgent
 
@@ -70,6 +75,9 @@ from dependencyrag.tools import (
     QuestionTool,
     FinalAnswerTool,
     FeedbackTool,
+    AnswerTool,
+    AnswerToolGraphConstruction,
+    AskNewQuestionTool,
 )
 
 app = typer.Typer()
@@ -81,39 +89,130 @@ construct_dependency_graph_tool_name = ConstructDepsGraphTool.default_value("req
 
 
 class AssistantAgent(lr.ChatAgent):
-    # def __init__(self, config: lr.ChatAgentConfig):
-    #     super().__init__(config)
+    def init_state(self):
+        super().init_state()
+        self.expecting_question_tool: bool = False
+        self.expecting_question_or_final_answer: bool = False  # expecting one of these
+        # tools
+        self.expecting_search_answer: bool = False
+        self.original_query: str | None = None  # user's original query
+        self.done_construct_graph: bool = False
+        self.accept_new_question: bool = False
 
-    def question_tool(self, msg: QuestionTool) -> str:
-        return msg.to_json()
+    def handle_message_fallback(
+        self, msg: str | ChatDocument
+    ) -> str | ChatDocument | None:
+        if self.expecting_question_or_final_answer:
+            return f"""
+            You may have intended to use a tool, but your JSON format may be wrong.
 
-    def final_answer_tool(self, msg: FinalAnswerTool) -> str:
+            REMINDER: You must do one of the following:
+            - If you are ready with the final answer to the user's ORIGINAL QUERY
+                [ Remember it was: {self.original_query} ],
+              then present your reasoning steps and final answer using the
+              `final_answer_tool` in the specified JSON format.
+            - If you still need to ask a question, then use the `question_tool`
+              to ask a SINGLE question that can be answered by the appropriate agent.
+            """
+        elif self.accept_new_question:
+            new_q_tool = AskNewQuestionTool(question="")
+            return self.create_llm_response(tool_messages=[new_q_tool])
+        elif self.expecting_question_tool:
+            return f"""
+            You must ask a question using the `question_tool` in the specified format,
+            to break down the user's original query: {self.original_query} into
+            smaller questions that can be answered by the approporiate agent.
+            """
+
+    def question_tool(self, msg: QuestionTool) -> str | ForwardTool:
+        self.expecting_search_answer = True
+        self.expecting_question_tool = False
+        return ForwardTool(agent=msg.target_agent)
+
+    def answer_tool(self, msg: AnswerTool) -> str:
+        self.expecting_question_or_final_answer = True
+        self.expecting_search_answer = False
+        return f"""
+        Here is the answer to your question:
+        {msg.answer}
+        Now decide whether you want to:
+        - present your FINAL answer to the user's ORIGINAL QUERY, OR
+        - ask another question using the `question_tool`
+            (Maybe REPHRASE the question to get BETTER search results).
         """
-        if not self.has_asked or self.n_questions > 1:
-            # not yet asked any questions, or LLM is currently asking
-            # a question (and this is the second one in this turn, and so should
-            # be ignored), ==>
-            # cannot present final answer yet (LLM may have hallucinated this json)
+
+    def answer_tool_graph(self, msg: AnswerToolGraphConstruction) -> str:
+        self.done_construct_graph = True
+        self.original_query = None  # reset the query
+        self.accept_new_question = True
+        msg = f"""{msg.answer} Now you can take user's questions? by addressing the "User" using {AT}User"""
+        # by addressing the "User" using {AT}User
+        return super().llm_response_forget(msg)
+
+    def final_answer_tool(self, msg: FinalAnswerTool) -> ForwardTool | str:
+        if not self.expecting_question_or_final_answer:
             return ""
-        """
-        # valid final answer tool: PASS it on so Critic gets it
-        return lr.utils.constants.PASS_TO + "Critic"
+        self.expecting_question_or_final_answer = False
+        # insert the original query into the tool, in case LLM forgot to do so.
+        msg.query = self.original_query
+        # fwd to critic
+        return ForwardTool(agent="Critic")
+
+    def ask_new_question_tool(self, msg: AskNewQuestionTool) -> str:
+        self.accept_new_question = True
+        msg = super().user_response("Please ask your question")
+        self.accept_new_question = False
+        self.original_query = None
+        # self.expecting_question_tool = True
+        return msg
 
     def feedback_tool(self, msg: FeedbackTool) -> str:
-        if msg.feedback == "":
-            return lr.utils.constants.DONE
+        if msg.suggested_fix == "":
+            self.original_query = None
+            self.accept_new_question = True
+            self.expecting_question_tool = False
+            return "No more suggestions."
         else:
+            self.expecting_question_or_final_answer = True
+            # reset question count since feedback may initiate new questions
             return f"""
             Below is feedback about your answer. Take it into account to
-            improve your answer, and present it again using the `final_answer_tool`.
+            improve your answer, EITHER by:
+            - using the `final_answer_tool` again but with improved REASONING, OR
+            - asking another question using the `question_tool`, and when you're
+                ready, present your final answer again using the `final_answer_tool`.
 
-            FEEDBACK:
-
-            {msg.feedback}
+            FEEDBACK: {msg.feedback}
+            SUGGESTED FIX: {msg.suggested_fix}
             """
+
+    def llm_response(
+        self, message: Optional[str | ChatDocument] = None
+    ) -> Optional[ChatDocument]:
+        if self.original_query is None:
+            self.original_query = (
+                message if isinstance(message, str) else message.content
+            )
+            # just received user query, so we expect a constructing the dependency graph
+            # by using the tool `construct_dependency_graph`.
+            # OR, this query is after constructing the dependency graph, so we need
+            # to enable the flag `expecting_question_tool`
+            if self.done_construct_graph and not self.accept_new_question:
+                self.expecting_question_tool = True
+            else:
+                return super().llm_response(message)
+
+        if self.expecting_question_or_final_answer or self.expecting_question_tool:
+            return super().llm_response(message)
 
 
 class RetrieverAgent(lr.ChatAgent):
+    def init_state(self):
+        super().init_state()
+        self.curr_query: str | None = None
+        self.expecting_search_results: bool = False
+        self.expecting_search_tool: bool = False
+
     def handle_message_fallback(
         self, msg: str | ChatDocument
     ) -> str | ChatDocument | None:
@@ -123,26 +222,106 @@ class RetrieverAgent(lr.ChatAgent):
             Re-try your response using the CORRECT format of the tool/function.
             """
 
+    def question_tool(self, msg: QuestionTool) -> str:
+        self.curr_query = msg.question
+        self.expecting_search_tool = True
+        return f"""
+        User asked this question: {msg.question}.
+        Use the `vulnerability_check` tool if the question is about vulnerabilities.
+        Otherwise, perform a web search using the `duckduckgo_search` tool
+        using the specified JSON format, to find the answer.
+        """
+
+    def vulnerability_check(self, msg: VulnerabilityCheck) -> str:
+        """Override the VulnerabilityCheck handler to update state"""
+        self.expecting_search_results = True
+        self.expecting_search_tool = False
+        return msg.handle()
+
+    def answer_tool(self, msg: AnswerTool) -> AgentDoneTool:
+        # signal DONE, and return the AnswerTool
+        return AgentDoneTool(tools=[msg])
+
+    def duckduckgo_search(self, msg: DuckduckgoSearchTool) -> str:
+        """Override the DDG handler to update state"""
+        self.expecting_search_results = True
+        self.expecting_search_tool = False
+        msg.num_results = 3
+        return msg.handle()
+
+    def llm_response(
+        self, message: Optional[str | ChatDocument] = None
+    ) -> Optional[ChatDocument]:
+        if self.expecting_search_results:
+            # message must be search results from the web search tool,
+            # so let the LLM compose a response based on the search results
+
+            curr_query = self.curr_query
+            # reset state
+            self.curr_query = None
+            self.expecting_search_results = False
+            self.expecting_search_tool = False
+
+            result = super().llm_response_forget(message)
+
+            # return an AnswerTool containing the answer,
+            # with a nudge meant for the Assistant
+            answer = f"""
+                Here are the web-search results for the question: {curr_query}.
+                ===
+                {result.content}
+                """
+
+            ans_tool = AnswerTool(answer=answer)
+            # cannot return a tool, so use this to create a ChatDocument
+            return self.create_llm_response(tool_messages=[ans_tool])
+
+        # Handling query from user (or other agent) => expecting a search tool
+        result = super().llm_response_forget(message)
+        return result
+
 
 class CriticAgent(lr.ChatAgent):
+    def init_state(self):
+        super().init_state()
+        self.expecting_feedback_tool: bool = False
+
     def final_answer_tool(self, msg: FinalAnswerTool) -> str:
         # received from Assistant. Extract the components as plain text,
         # so that the Critic LLM can provide feedback
+        self.expecting_feedback_tool = True
+
         return f"""
-        The user has presented the following intermediate steps and final answer
-        shown below. Please provide feedback using the `feedback_tool`.
-        Remember to set the `feedback` field to an empty string if the answer is valid,
-        otherwise give specific feedback on what the issues are and how the answer
-         can be improved.
+        The user has presented the following query, intermediate steps and final answer
+        shown below. Please provide feedback using the `feedback_tool`,
+        with the `feedback` field containing your feedback, and
+        the `suggested_fix` field containing a suggested fix, such as fixing how
+        the answer or the steps, or how it was obtained from the steps, or
+        asking new questions.
+
+        REMEMBER to set the `suggested_fix` field to an EMPTY string if the answer is
+        VALID.
+
+        QUERY: {msg.query}
 
         STEPS: {msg.steps}
 
         ANSWER: {msg.answer}
         """
 
-    def feedback_tool(self, msg: FeedbackTool) -> str:
-        # say DONE and PASS to the feedback goes back to Assistant to handle
-        return lr.utils.constants.DONE + " " + lr.utils.constants.PASS
+    def feedback_tool(self, msg: FeedbackTool) -> FeedbackTool:
+        # validate, signal DONE, include the tool
+        self.expecting_feedback_tool = False
+        return AgentDoneTool(tools=[msg])
+
+    def handle_message_fallback(
+        self, msg: str | ChatDocument
+    ) -> str | ChatDocument | None:
+        if self.expecting_feedback_tool:
+            return """
+            You forgot to provide feedback using the `feedback_tool`
+            on the user's reasoning steps and final answer.
+            """
 
 
 @app.command()
@@ -185,7 +364,7 @@ def main(
             llm = lm.OpenAIGPTConfig(chat_model=model)
     else:
         llm = lm.OpenAIGPTConfig(chat_model=lm.OpenAIChatModel.GPT4o)
-
+    llm = lm.azure_openai.AzureConfig()
     match provider:
         case "google":
             search_tool_class = GoogleSearchTool
@@ -208,30 +387,23 @@ def main(
              dependency graphs for software packages.
              (2) Answer user's questions. You must break down complex questions into
               simpler questions that can be answered by retreieving information from
-              different sources.
-              You must ask me (the user) each question ONE BY ONE, using the
-               `question_tool` in the specified format, and I will retreive information
-                from the constructed dependency graph, the web, or the vulnerability database.
-              Once you receive the information and send you a brief answer.
-              Once you have enough information to answer my original (complex) question,
-              you MUST present your INTERMEDIATE STEPS and FINAL ANSWER using the
-               `final_answer_tool` in the specified JSON format. You will then receive
-                FEEDBACK from the Critic, and if needed you should try to improve your
-                answer based on this feedback.
+              different agents.
 
             First, ask the user to provide the name of the package, version, and ecosystem,
              they want to analyze.
             Then, use the TOOL: `{construct_dependency_graph_tool_name}` to
             construct the dependency graph.
-            After constructing the dependency graph, ask the user if they have any
-             other questions or if they want to quit.
-            Once you receive the User's query, process it like this:
-            - Use the TOOL: `{send_tool_name}` to send the query `RetrieverAgent` Agent
-            If you need to retreive information about the vulnerabilities.
-            ALSO, send the query to `RetrieverAgent` Agent if you need to retreive
-             information from the web.
-            - Use the TOOL: {question_tool_name} to send the query, if the query
-             requires analyzing or retreiving information from the dependency graph.
+            After constructing the dependency graph, the user will ask their questions.
+            You must ask me (the user) each question ONE BY ONE, using the
+               {question_tool_name} in the specified format, and I will retreive information
+                either from the constructed dependency graph, the web, or the
+                vulnerability database. Provide ALL package name, version, and type when
+                you ask the question about vulnerabilities.
+            Once you have enough information to answer my original (complex) question,
+              you MUST present your INTERMEDIATE STEPS and FINAL ANSWER using the
+               `final_answer_tool` in the specified JSON format. You will then receive
+                FEEDBACK from the Critic, and if needed you should try to improve your
+                answer based on this feedback.
             """,
         )
     )
@@ -244,14 +416,13 @@ def main(
             use_tools=tools,
             use_functions_api=not tools,
             llm=llm,
-            system_message=f"""You are an expert in Dependency graphs and analyzing
-             them using Neo4j.
+            system_message="""You are an expert in retreiving information from Neo4j
+            graph database.
             - Use the tool/function `construct_dependency_graph` to construct the
               dependency graph.
-            - Use the tool/function `{question_tool_name}` to get relevant information from the
-             graph database about the dependency graph. Once you receive the results,
-              you must compose a CONCISE answer and say DONE and show the answer to me,
-               in this format: DONE [... your CONCISE answer here ...]
+            - Once you receive the results from the graph database about the dependency
+             graph you must compose a CONCISE answer and say DONE and show the answer
+             to me, in this format: DONE [... your CONCISE answer here ...]
             """,
         )
     )
@@ -268,7 +439,7 @@ def main(
             - Use the tool/function `vulnerability_check` to retrieve vulnerabilitiy
              information about the provided package name and package version.
             MAKE SURE you have these information before using this tool/function.
-            - Use the tool/function `{search_tool_handler_method}` to retreive
+            - Use the tool/function `duckduckgo_search` to retreive
              information from the web.
             """,
         )
@@ -284,48 +455,65 @@ def main(
         You must examine these and provide feedback to the user, using the
         `feedback_tool`, as follows:
         - If you think the answer is valid,
-            simply set the `feedback` field to an empty string "".
+            simply set the `suggested_fix` field to an empty string "".
         - Otherwise set the `feedback` field to a reason why the answer is invalid,
-            and suggest how the user can improve the answer.
+            and in the `suggested_fix` field indicate how the user can improve the
+            answer, for example by reasoning differently, or asking different questions.
         """,
     )
     critic_agent = CriticAgent(critic_agent_config)
 
-    retriever_agent.enable_message(search_tool_class)
+    retriever_agent.enable_message(DuckduckgoSearchTool)
     retriever_agent.enable_message(VulnerabilityCheck)
+    retriever_agent.enable_message(QuestionTool, use=False, handle=True)
+    # agent is producing AnswerTool, so LLM should not be allowed to "use" it
+    retriever_agent.enable_message(AnswerTool, use=False, handle=True)
 
     dependency_agent.enable_message(ConstructDepsGraphTool, use=False, handle=True)
     dependency_agent.enable_message(QuestionTool, use=False, handle=True)
     dependency_agent.disable_message_use(GraphSchemaTool)
     dependency_agent.disable_message_use(CypherCreationTool)
+    dependency_agent.enable_message(QuestionTool, use=False, handle=True)
+    # agent is producing AnswerTool, so LLM should not be allowed to "use" it
+    dependency_agent.enable_message(AnswerTool, use=False, handle=True)
+    dependency_agent.enable_message(AnswerToolGraphConstruction, use=False, handle=True)
 
-    assistant_agent.enable_message(SendTool, use=True, handle=True)
+    # assistant_agent.enable_message(SendTool, use=True, handle=True)
     assistant_agent.enable_message(QuestionTool, use=True, handle=True)
     assistant_agent.enable_message(ConstructDepsGraphTool, use=True, handle=True)
     assistant_agent.enable_message(FinalAnswerTool)
     assistant_agent.enable_message(FeedbackTool, use=False, handle=True)
+    assistant_agent.enable_message(AnswerTool, use=False, handle=True)  #
+    assistant_agent.enable_message(AnswerToolGraphConstruction, use=False, handle=True)
+    assistant_agent.enable_message(AskNewQuestionTool, use=False, handle=True)
+    # assistant_agent.enable_message(PassTool)
 
     critic_agent.enable_message(FeedbackTool)
     critic_agent.enable_message(FinalAnswerTool, use=False, handle=True)
 
     dependency_task = lr.Task(
         dependency_agent,
-        interactive=False,
         llm_delegate=True,
+        single_round=False,
+        interactive=False,
     )
 
     retriever_task = lr.Task(
-        retriever_agent, interactive=False, done_if_response=[lr.Entity.AGENT]
+        retriever_agent,
+        interactive=False,
+        llm_delegate=True,
+        single_round=False,
+        # done_if_response=[lr.Entity.AGENT]
     )
 
     assistant_task = lr.Task(
         assistant_agent,
-        interactive=True,
+        interactive=False,
+        restart=True,
     )
 
     critic_task = lr.Task(
         critic_agent,
-        # name="Critic",
         interactive=False,
     )
 

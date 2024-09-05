@@ -6,40 +6,92 @@ import langroid as lr
 from langroid.utils.constants import NO_ANSWER
 
 
+class AskNewQuestionTool(lr.ToolMessage):
+    request = "ask_new_question_tool"
+    purpose = "Ask a new <question>"
+    question: str
+
+
+class AnswerTool(lr.ToolMessage):
+    request = "answer_tool"
+    purpose = "Present the <answer> to a question"
+    answer: str
+
+
+class AnswerToolGraphConstruction(lr.ToolMessage):
+    """Wrapper for answer from construct_dependency_graph"""
+
+    request = "answer_tool_graph"
+    purpose = "Present the <answer> to a question"
+    answer: str
+
+
 class FinalAnswerTool(lr.ToolMessage):
     request: str = "final_answer_tool"
     purpose: str = """
         Present the intermediate <steps> and
-        final <answer> to the user's original query.
+        final <answer> to the user's original <query>.
         """
     steps: str
     answer: str
 
 
+# class FeedbackTool(lr.ToolMessage):
+#     request: str = "feedback_tool"
+#     purpose: str = "Provide <feedback> on the user's answer."
+#     feedback: str
+
+#     @classmethod
+#     def examples(cls) -> List["lr.ToolMessage"]:
+#         return [
+#             cls(feedback=""),
+#             cls(
+#                 feedback="""
+#                 The answer is invalid because the conclusion does not follow from the
+#                 steps. Please check your reasoning and try again.
+#                 """
+#             ),
+#         ]
+
+
 class FeedbackTool(lr.ToolMessage):
     request: str = "feedback_tool"
-    purpose: str = "Provide <feedback> on the user's answer."
+    purpose: str = """
+    Provide <feedback> on the user's answer. If the answer is valid based on the
+    reasoning steps, then the feedback MUST be EMPTY
+    """
     feedback: str
+    suggested_fix: str
 
     @classmethod
     def examples(cls) -> List["lr.ToolMessage"]:
         return [
-            cls(feedback=""),
-            cls(
-                feedback="""
-                The answer is invalid because the conclusion does not follow from the
-                steps. Please check your reasoning and try again.
-                """
+            # just example
+            cls(feedback="This looks fine!", suggested_fix=""),
+            # thought + example
+            (
+                "I want to provide feedback on the reasoning steps and final answer",
+                cls(
+                    feedback="""
+                    The answer is invalid because the conclusion does not follow from the
+                    steps. Please check your reasoning and try again.
+                    """,
+                    suggested_fix="Check reasoning and try again",
+                ),
             ),
         ]
 
 
 class QuestionTool(lr.ToolMessage):
     request: str = "question_tool"
-    purpose: str = """Ask a SINGLE <question> that can be answered from a Neo4j graph
-     database that maintains the dependency graph.
+    purpose: str = """Ask a SINGLE <question> that can be answered. <target_agent>
+    indicates the agent that should provide the answer.
+    You should specify "DependencyGraphAgent" if the answer should be obtained from the
+    graph database OR "RetrieverAgent" if the question asks about vulnerability or
+    should be answered using web search.
     """
     question: str
+    target_agent: str
 
 
 class VulnerabilityCheck(lr.ToolMessage):
@@ -77,7 +129,8 @@ class VulnerabilityCheck(lr.ToolMessage):
                     for affected in vuln["affected"]:
                         if "versions" in affected:
                             del affected["versions"]
-        return json.dumps(response_data, indent=4)
+        return f"""Here is the vulnerability Result:
+        {json.dumps(response_data, indent=4)}"""
 
 
 class ConstructDepsGraphTool(lr.ToolMessage):

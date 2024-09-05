@@ -1,16 +1,12 @@
 import os
 from typing import Optional
 
-# from rich import print
-# from rich.prompt import Prompt
-
 from pyvis.network import Network
 
 import langroid as lr
 from langroid import ChatDocument
 from langroid.agent.special.neo4j.neo4j_chat_agent import (
     Neo4jChatAgent,
-    CypherRetrievalTool,
 )
 from langroid.utils.constants import DONE
 
@@ -19,14 +15,22 @@ from dependencyrag.tools import (
     ConstructDepsGraphTool,
     VisualizeGraph,
     QuestionTool,
+    AnswerTool,
+    AnswerToolGraphConstruction,
 )
+
+from langroid.agent.tools.orchestration import AgentDoneTool
 
 
 class DependencyGraphAgent(Neo4jChatAgent):
-    n_searches: int = 0
     curr_query: str | None = None
+    expecting_search_results: bool = False
+    expecting_search_tool: bool = False
 
-    def construct_dependency_graph(self, msg: ConstructDepsGraphTool) -> None:
+    def construct_dependency_graph(
+        self, msg: ConstructDepsGraphTool
+    ) -> Optional[ChatDocument]:
+        self.answer_construct_graph = True
         check_db_exist = (
             "MATCH (n) WHERE n.name = $name AND n.version = $version RETURN n LIMIT 1"
         )
@@ -35,7 +39,9 @@ class DependencyGraphAgent(Neo4jChatAgent):
         )
         if response.success and response.data:
             # self.config.database_created = True
-            return "Database Exists" + " " + lr.utils.constants.DONE
+            answer = f"Graph Database Exists for {msg.package_name}"
+            ans_tool = AnswerToolGraphConstruction(answer=answer)
+            return self.create_llm_response(tool_messages=[ans_tool])
         else:
             if msg.package_type.lower() == "npm":
                 package_type_system = "NPM"
@@ -56,13 +62,15 @@ class DependencyGraphAgent(Neo4jChatAgent):
             response = self.write_query(construct_dependency_graph)
             if response.success:
                 self.config.database_created = True
-                return f"Database is created! {DONE}"
+                answer = f"Database is created! {DONE}"
             else:
-                return f"""
+                answer = f"""
                     Database is not created!
                     Seems the package {msg.package_name} is not found,
                     {DONE}
                     """
+            ans_tool = AnswerToolGraphConstruction(answer=answer)
+            return self.create_llm_response(tool_messages=[ans_tool])
 
     def visualize_dependency_graph(self, msg: VisualizeGraph) -> str:
         """
@@ -168,6 +176,7 @@ class DependencyGraphAgent(Neo4jChatAgent):
 
     def question_tool(self, msg: QuestionTool) -> str:
         self.curr_query = msg.question
+        self.expecting_search_tool = True
         if self.config.kg_schema is None:
             schema_summary = self.llm_response_forget(
                 f"""Provide a consise summary of nodes and edges WITHOUT any explanation
@@ -188,51 +197,44 @@ class DependencyGraphAgent(Neo4jChatAgent):
         self, message: Optional[str | ChatDocument] = None
     ) -> Optional[ChatDocument]:
         if (
-            isinstance(message, ChatDocument)
-            and message.metadata.sender == lr.Entity.AGENT
-            and self.n_searches > 0
+            self.expecting_search_results
             and "There was an error in your Cypher Query" not in message.content
         ):
             # must be search results from the retreival tool,
             # so let the LLM compose a response based on the search results
-            self.n_searches = 0  # reset search count
-            message.content = "Provide concsie answer: " + message.content
-            result = super().llm_response_forget(message)
+            curr_query = self.curr_query
+            # reset state
+            self.curr_query = None
+            self.expecting_search_results = False
+            self.expecting_search_tool = False
+
+            # message.content = "Provide concsie answer: " + message.content
+            # result = super().llm_response_forget(message)
             # Augment the LLM's composed answer with a helpful nudge
             # back to the Assistant
-            result.content = f"""
-            Here are the retrieval_query results for the question: {self.curr_query}.
+            answer = f"""
+            Here are the results for the question: {curr_query}.
             ===
-            {result.content}
+            {message.content}
             ===
             Decide if you want to ask any further questions, for the
             user's original question.
             """
-            self.curr_query = None
-            return result
+            ans_tool = AnswerTool(answer=answer)
+            # cannot return a tool, so use this to create a ChatDocument
+            return self.create_llm_response(tool_messages=[ans_tool])
 
         if "There was an error in your Cypher Query" in message.content:
             message.content = f"""FIX the Cypher Query and make another trial:
             Here is the error message: {message.content}.
             ===
             Remember the query: {self.curr_query}
-            and the graph schema: {self.config.kg_schema} to generate a correct Cypher
-            Query.
+            and the graph schema: {self.config.kg_schema} to generate a CORRECT Cypher
+            Query and DON'T repeat the above error.
             """
-        # Handling query from user (or other agent)
+        # Handling query from user (or other agent) => expecting a search tool
         result = super().llm_response_forget(message)
-        if result is None:
-            return result
-        tools = self.get_tool_messages(result)
-        if all(not isinstance(t, CypherRetrievalTool) for t in tools):
-            # LLM did not use search tool;
-            # Replace its response with a placeholder message
-            # and the agent fallback_handler will remind the LLM
-            result.content = "Did not use retrieval_query tool."
-            return result
-
-        self.n_searches += 1
-        # result includes a search tool,
+        self.expecting_search_results = True
         return result
 
     def handle_message_fallback(
@@ -249,3 +251,11 @@ class DependencyGraphAgent(Neo4jChatAgent):
             user's question : {self.curr_query} based on this graph database schema
             {self.config.kg_schema}.
             """
+
+    def answer_tool(self, msg: AnswerTool) -> AgentDoneTool:
+        # signal DONE, and return the AnswerTool
+        return AgentDoneTool(tools=[msg])
+
+    def answer_tool_graph(self, msg: AnswerToolGraphConstruction) -> AgentDoneTool:
+        # signal DONE, and return the AnswerToolGraphConstruction
+        return AgentDoneTool(tools=[msg])
