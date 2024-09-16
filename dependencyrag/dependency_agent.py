@@ -26,6 +26,8 @@ class DependencyGraphAgent(Neo4jChatAgent):
     curr_query: str | None = None
     expecting_search_results: bool = False
     expecting_search_tool: bool = False
+    # Following attributes are for analytical purposes
+    num_corrected_cypher_queries: int = 0
 
     def construct_dependency_graph(
         self, msg: ConstructDepsGraphTool
@@ -207,16 +209,16 @@ class DependencyGraphAgent(Neo4jChatAgent):
             self.curr_query = None
             self.expecting_search_results = False
             self.expecting_search_tool = False
-
-            # message.content = "Provide concsie answer: " + message.content
-            # result = super().llm_response_forget(message)
+            evidence = f"Here is the used query: {self.current_retrieval_cypher_query}"
             # Augment the LLM's composed answer with a helpful nudge
             # back to the Assistant
+
             answer = f"""
             Here are the results for the question: {curr_query}.
             ===
             {message.content}
             ===
+            {evidence}
             Decide if you want to ask any further questions, for the
             user's original question.
             """
@@ -225,6 +227,7 @@ class DependencyGraphAgent(Neo4jChatAgent):
             return self.create_llm_response(tool_messages=[ans_tool])
 
         if "There was an error in your Cypher Query" in message.content:
+            self.num_corrected_cypher_queries += 1
             message.content = f"""FIX the Cypher Query and make another trial:
             Here is the error message: {message.content}.
             ===
@@ -243,7 +246,7 @@ class DependencyGraphAgent(Neo4jChatAgent):
         if (
             isinstance(msg, ChatDocument)
             and msg.metadata.sender == lr.Entity.LLM
-            and self.n_searches == 0
+            and self.expecting_search_tool
         ):
             question_tool_name = QuestionTool.default_value("request")
             return f"""

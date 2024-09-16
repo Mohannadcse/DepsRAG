@@ -5,6 +5,16 @@ from typing import List
 import langroid as lr
 from langroid.utils.constants import NO_ANSWER
 
+from langroid.pydantic_v1 import BaseModel, Field
+
+
+class AnswerSteps(BaseModel):
+    step_query: str = Field(..., description="The query for reference")
+    step_evidence: str = Field(
+        ..., description="Cypher Query or URL link for grounding"
+    )
+    step_answer: str = Field(..., description="Answer intermediate step")
+
 
 class AskNewQuestionTool(lr.ToolMessage):
     request = "ask_new_question_tool"
@@ -34,24 +44,6 @@ class FinalAnswerTool(lr.ToolMessage):
         """
     steps: str
     answer: str
-
-
-# class FeedbackTool(lr.ToolMessage):
-#     request: str = "feedback_tool"
-#     purpose: str = "Provide <feedback> on the user's answer."
-#     feedback: str
-
-#     @classmethod
-#     def examples(cls) -> List["lr.ToolMessage"]:
-#         return [
-#             cls(feedback=""),
-#             cls(
-#                 feedback="""
-#                 The answer is invalid because the conclusion does not follow from the
-#                 steps. Please check your reasoning and try again.
-#                 """
-#             ),
-#         ]
 
 
 class FeedbackTool(lr.ToolMessage):
