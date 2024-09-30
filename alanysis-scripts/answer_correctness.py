@@ -37,17 +37,24 @@ total_iterations_without_critic = df_without_critic.count().sum()
 total_correct_without_critic = df_without_critic.sum().sum()
 print(total_iterations_without_critic)
 print(total_correct_without_critic)
-success_rate_without_critic = (total_correct_without_critic / total_iterations_without_critic) * 100
+success_rate_without_critic = (
+    total_correct_without_critic / total_iterations_without_critic
+) * 100
 
 total_iterations_with_critic = df_with_critic.count().sum()
 total_correct_with_critic = df_with_critic.sum().sum()
-success_rate_with_critic = (total_correct_with_critic / total_iterations_with_critic) * 100
+success_rate_with_critic = (
+    total_correct_with_critic / total_iterations_with_critic
+) * 100
 
 # Calculate percentage improvement in success rate
 if success_rate_without_critic != 0:
-    percentage_improvement = ((success_rate_with_critic - success_rate_without_critic) / success_rate_without_critic) * 100
+    percentage_improvement = (
+        (success_rate_with_critic - success_rate_without_critic)
+        / success_rate_without_critic
+    ) * 100
 else:
-    percentage_improvement = float('inf')  # Handle division by zero
+    percentage_improvement = float("inf")  # Handle division by zero
 
 # Print success rates and percentage improvement
 print(f"Success Rate Without Critic-Agent: {success_rate_without_critic:.2f}%")

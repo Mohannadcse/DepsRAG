@@ -6,7 +6,7 @@ This scenario comprises 4 agents:
 - AssistantAgent: orchestrates between other agents and breaks down complex questions
  into smaller steps.
 - RetrieverAgent: retreive information from the web or the vulnerability database.
-- DependencyGraphAgent: builds a dependency graph using Neo4j. It alsotranslates natural
+- DependencyGraphAgent: builds a dependency graph using Neo4j. It also translates natural
  language to Cypher queries and executes them on the KG to answer user's queries.
 - CriticAgent: provides feedback to the user based on the assistant's response.
 
