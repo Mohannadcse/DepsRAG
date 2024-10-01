@@ -65,7 +65,6 @@ from dependencyrag.dependency_agent import DependencyGraphAgent
 from dependencyrag.critic_agent import CriticAgent
 from dependencyrag.assistant_agent import AssistantAgent
 from dependencyrag.retriever_agent import RetrieverAgent
-from dependencyrag.iteration_analysis import store_and_reset_analytics_attributes
 
 from dependencyrag.tools import (
     ConstructDepsGraphTool,
@@ -126,7 +125,8 @@ def main(
             llm = lm.OpenAIGPTConfig(chat_model=model)
     else:
         llm = lm.OpenAIGPTConfig(chat_model=lm.OpenAIChatModel.GPT4o)
-    llm = lm.azure_openai.AzureConfig()
+
+    # llm = lm.azure_openai.AzureConfig()
     # llm = lm.OpenAIGPTConfig(chat_model='groq/llama3-70b-8192')
     match provider:
         case "google":
@@ -136,7 +136,7 @@ def main(
         case _:
             raise ValueError(f"Unsupported provider {provider} specified.")
 
-    search_tool_handler_method = search_tool_class.default_value("request")
+    # search_tool_handler_method = search_tool_class.default_value("request")
 
     assistant_agent = AssistantAgent(
         lr.ChatAgentConfig(
@@ -286,34 +286,10 @@ def main(
     )
 
     assistant_task.add_sub_task([dependency_task, retriever_task, critic_task])
-    questions_list = {
-        1: "what's the density of the dependency graph of chainlit version 1.1.200 pypi",
-        2: """which packages in chainlit version 1.1.200 pypi have the most dependencies
-          relying on them (i.e., nodes have the highest in-degree in the graph), and
-            what is the risk associated with a vulnerability in those packages?""",
-        3: """In the dependency graph of chainlit version 1.1.200 pypi,
-            Are there any multi-version conflicts where different packages
-            depend on different versions of the same package? if yes,
-            provide examples of these conflics and all paths that lead to these packages
-            from the root node""",
-    }
 
     assistant_task.run(
         "what's the density of the dependency graph of chainlit version 1.1.200 pypi? find total number of nodes and relathionships and then compute the density"
     )
-
-    # for question_no, question_str in questions_list.items():
-    #     for i in range(10):  # the number of iterations
-    #         assistant_task.run(question_str)
-    #         store_and_reset_analytics_attributes(
-    #             iteration=i,  # The iteration count
-    #             dep_agent=dependency_agent,
-    #             asst_agent=assistant_agent,
-    #             critic_agent=critic_agent,
-    #             retriever_agent=retriever_agent,
-    #             question_no=question_no,
-    #             question_str=question_str,
-    #         )
 
 
 if __name__ == "__main__":

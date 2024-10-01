@@ -110,7 +110,7 @@ class AssistantAgent(lr.ChatAgent):
             self.original_query = None
             self.accept_new_question = True
             self.expecting_question_tool = False
-            return "No more suggestions, DONE."
+            return "No more suggestions"  # add `, DONE.` to terminate
         else:
             if self.num_critic_responses > 9:
                 self.terminated = True
