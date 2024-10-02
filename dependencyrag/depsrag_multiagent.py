@@ -58,7 +58,6 @@ from langroid.agent.special.neo4j.neo4j_chat_agent import (
     GraphSchemaTool,
     CypherCreationTool,
 )
-from langroid.agent.tools.google_search_tool import GoogleSearchTool
 from langroid.agent.tools.duckduckgo_search_tool import DuckduckgoSearchTool
 from langroid.utils.configuration import set_global, Settings
 
@@ -94,12 +93,6 @@ def main(
         False, "--tools", "-t", help="use langroid tools instead of function-calling"
     ),
     nocache: bool = typer.Option(False, "--nocache", "-nc", help="don't use cache"),
-    provider: str = typer.Option(
-        "ddg",
-        "--provider",
-        "-p",
-        help="search provider name (google, ddg)",
-    ),
 ) -> None:
     set_global(
         Settings(
@@ -127,17 +120,8 @@ def main(
     else:
         llm = lm.OpenAIGPTConfig(chat_model=lm.OpenAIChatModel.GPT4o)
 
-    llm = lm.azure_openai.AzureConfig()
+    # llm = lm.azure_openai.AzureConfig()
     # llm = lm.OpenAIGPTConfig(chat_model='groq/llama3-70b-8192')
-    match provider:
-        case "google":
-            search_tool_class = GoogleSearchTool
-        case "ddg":
-            search_tool_class = DuckduckgoSearchTool
-        case _:
-            raise ValueError(f"Unsupported provider {provider} specified.")
-
-    # search_tool_handler_method = search_tool_class.default_value("request")
 
     assistant_agent = AssistantAgent(
         lr.ChatAgentConfig(
