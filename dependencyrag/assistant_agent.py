@@ -84,8 +84,7 @@ class AssistantAgent(lr.ChatAgent):
         self.done_construct_graph = True
         self.original_query = None  # reset the query
         self.accept_new_question = True
-        msg = f"""{msg.answer} Now you can take user's questions? by addressing the
-        "User" using {AT}User"""
+        msg = f"""{msg.answer}"""
         return super().llm_response_forget(msg)
 
     def final_answer_tool(self, msg: FinalAnswerTool) -> ForwardTool | str:

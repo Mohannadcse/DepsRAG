@@ -79,7 +79,7 @@ class QuestionTool(lr.ToolMessage):
     purpose: str = """Ask a SINGLE <question> that can be answered. <target_agent>
     indicates the agent that should provide the answer.
     You should specify "DependencyGraphAgent" if the answer should be obtained from the
-    graph database OR "RetrieverAgent" if the question asks about vulnerability or
+    graph database OR "SearchAgent" if the question asks about vulnerability or
     should be answered using web search.
     """
     question: str

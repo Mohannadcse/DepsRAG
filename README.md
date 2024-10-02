@@ -1,8 +1,8 @@
 <div align="center">
-  <img src="docs/DepRAG.png" alt="Logo" 
-        width="400" align="center">
+  <img src="docs/DepsRAG.png" alt="Logo" 
+        width="450" align="center">
 </div>
-
+<br><br>
 
 
 # DepsRAG
@@ -11,52 +11,66 @@
 - Constructing the software dependencies (direct and transitive) as a KG.
 - Supporting 4 popular software ecosystems (i.e. PyPI, NPM, Cargo, and Go). 
 - Generatiing atutomatically Cypher queries to retrieve information from the KG.
-- Augmenting users' questions with the retrieved information.
+- Augmenting users' questions with the retrieved information from the KG, as well as from the Web and Vulnerability DB.
 
 ## DepsRAG Architecture
 
-DepsRAG uses the following set of tools to accomplish its process:
+DepsRAG comprises the following agents to accomplish its process:
 
-- `DepGraphTool` to build the dependency graph for a given pkg version, using the API
-   at [DepsDev](https://deps.dev/)
-- `GoogleSearchTool` to find package version and type information. It also can answer
-other question from the web about other aspects after obtaining the intended information
-from the dependency graph. For examples:
-  - does the dpendency use latest version for this package verion?
-  - Can I upgrade this package in the dependency graph?
-- `GraphSchemaTool`: get schema of Neo4j knowledge-graph
-- `CypherRetrievalTool`: generate cypher queries to get information from
-   Neo4j knowledge-graph (Cypher is the query language for Neo4j)
-- `VulnerabilityCheck`: search OSV vulnerability DB based on package name, version, and 
-its ecosystem.
-- `VisualizeGraph`: visualize the entire dependency grpah
+1. **AssistantAgent.** This agent orchestrates the work between the agents. It also breaks down complex questions into simple steps and then aggregates all responses to answer the user's query. This agent utilizes the following tool:
+   - `UserInteractionTool`: manages the interaction between the chatbot and user. 
+2. **DependencyGraphAgent.** This agent handles the interactions the with graph database that represents the dependencies.
+   - `ConstructKGTool`: builds the dependency graph for a given pkg version, using the API
+   at [DepsDev](https://deps.dev/).
+   - `GraphSchemaTool`: gets schema of Neo4j knowledge-graph.
+   - `CypherQueryTool`: generates cypher queries to get information from
+   Neo4j knowledge-graph (Cypher is the query language for Neo4j).
+   - `VisualizeGraph`: visualizes the entire dependency grpah. 
+3. **CriticAgent.** This agent provides a feedback upon the final answer provided by the **AssistantAgent**.
+   - `FeedbackTool`: provides the feedback message. 
+4. **SearchAgent.**
+   - `WebSearchTool`: to find package version and type information. It also can answer other question from the web about other aspects after obtaining the intended information from the dependency graph For examples:
+      - does the dpendency use latest version for this package verion?
+      - can I upgrade this package in the dependency graph?
+    - `VulnerabilityTool`: searches OSV vulnerability DB based on package name, version, and its ecosystem.
+
 
 ## DepsRAG Workflow
 
 The workflow of `DepsRAG` as follows: 
-- The chatbot will ask you to provide the name and ecosystem of the software package.
-- It will then the tool `GoogleSearchTool` to get the version of this package (you can skip this process by providing the intended version).
-- The chatbot will ask to confirm the version number before proceeding with constructing the dependencies as knowledge graph.
--  Finally, after constructing the dependency graph, you can ask the chatbot
-questions about the dependency graph such as these (specific package names are
-used here for illustration purposes, but of course you can use other names):
+- The **AssistantAgent** asks you to provide the package name, version, and ecosystem of the intended software package.
+- The **AssistantAgent** forwards these details to the **DependencyGraphAgent** for constructing the dependencies (direct and transitive) as knowledge graph.
+- The **AssistantAgent** asks you to ask questions about the dependencies.
+- The **AssistantAgent** decomposes complex questions into simple steps and then leverages the RAG mechanism to retreieve additional information from the Web, knowledge graph, and/or vulnerability database to augment the user's question with the additional information.
 
+For package X, version, Y, in ecosystem Z, following are examples of questions:
    - what's the depth of the graph?
    - what are the direct dependencies?
    - any dependency on pytorch? which version?
    - Is this package pytorch vunlnerable?
-  (Note that in this case the chatbot will consult the 
-  tool `GoogleSearchTool` to get an answer from the internet.)
    - tell me 3 interesting things about this package or dependency graph
-   - what's the path between package-1 and package-2? (provide names of package-1
-  and -2)
+   - what's the path between package-1 and package-2? (provide names of package-1 and -2)
    - Tell me the names of all packages in the dependency graph that use pytorch.
+
+The following illustration shows the steps that `DepsRAG` will take to answer this question:
+
+> For Chainlit, PyPI, version 1.1.200, which packages have the most dependencies relying on them (i.e., which nodes have the highest in-degree in the graph), and what is the risk associated with a vulnerability in those packages?
+
+
+<div align="center">
+  <img src="docs/depsrag_steps.png" alt="Logo" 
+        width="700" align="center">
+</div>
+<br><br>
 
 
 # :fire: Updates/Releases
 
 <details>
 <summary> <b>Click to expand</b></summary>
+
+- **Sept 2024:** 
+  - Adding critic-agent interaction.
 
 - **Aug 2024:** 
   - Adding DuckDuck web search tool.
@@ -169,23 +183,20 @@ After finishing the interaction with `DepsRAG` chatbot, you can run the command
 
 Run `DepsRAG` in the CLI mode using this command:
 ```
-python3 dependencyrag/dependency_chatbot.py
+python3 dependencyrag/depsrag_multiagent.py
  -m <LLM-Name>
 ```
 
 The flag `-m` provides the option to overwrite the default LLM (`gpt-4o`) used by `DepsRAG`. If you want to use Azure, set the flag `-m azure`, while for other LLMs, please check Langroid documentation ([Open/Local LLMs](https://langroid.github.io/langroid/tutorials/local-llm-setup/) and other [non-OpenAI](https://langroid.github.io/langroid/tutorials/non-openai-llms/) proprietary LLMs).
 
 Here is a recording shows the CLI mode in action:
-![Demo](docs/dependency_chatbot.gif)
+![Demo](docs/DepsRAG_in_action.gif)
 
 
 Run `DepsRAG` in the UI mode using this command:
 ```
 chainlit run dependencyrag/chainlit/chainlit_dependency_chatbot.py
 ```
-
-Here is a recording shows the UI moded in action:
-![Demo](docs/chainlit_dependency_chatbot.gif)
 
 **NOTE:** the dependency graph is constructed based
 on [DepsDev API](https://deps.dev/). Therefore, the Chatbot will not be able to

@@ -5,7 +5,7 @@ that models a dependency graph of Python packages.
 This scenario comprises 4 agents:
 - AssistantAgent: orchestrates between other agents and breaks down complex questions
  into smaller steps.
-- RetrieverAgent: retreive information from the web or the vulnerability database.
+- SearchAgent: retreive information from the web or the vulnerability database.
 - DependencyGraphAgent: builds a dependency graph using Neo4j. It also translates natural
  language to Cypher queries and executes them on the KG to answer user's queries.
 - CriticAgent: provides feedback to the user based on the assistant's response.
@@ -16,7 +16,7 @@ The workflow as follows.
  dependency graph using Neo4j.
 3-> user asks natural language query about dependencies
 4-> AssistantAgent simplifies these question into steps and sends them to the targeted
- agents: DependencyGraphAgent and/or RetrieverAgent.
+ agents: DependencyGraphAgent and/or SearchAgent.
 5-> Query results returned to the AssistantAgent, if there are remaining steps, the
  AssistantAgent will repeat step 4 until receiving answers upon all steps.
 6-> AssistantAgent summarizes the answers and send them to the CriticAgent to get
@@ -44,6 +44,7 @@ python3 dependencyrag/depsrag_multiagent.py
 import typer
 
 from dotenv import load_dotenv
+from rich.prompt import Prompt
 
 import langroid as lr
 import langroid.language_models as lm
@@ -64,7 +65,7 @@ from langroid.utils.configuration import set_global, Settings
 from dependencyrag.dependency_agent import DependencyGraphAgent
 from dependencyrag.critic_agent import CriticAgent
 from dependencyrag.assistant_agent import AssistantAgent
-from dependencyrag.retriever_agent import RetrieverAgent
+from dependencyrag.search_agent import SearchAgent
 
 from dependencyrag.tools import (
     ConstructDepsGraphTool,
@@ -126,7 +127,7 @@ def main(
     else:
         llm = lm.OpenAIGPTConfig(chat_model=lm.OpenAIChatModel.GPT4o)
 
-    # llm = lm.azure_openai.AzureConfig()
+    llm = lm.azure_openai.AzureConfig()
     # llm = lm.OpenAIGPTConfig(chat_model='groq/llama3-70b-8192')
     match provider:
         case "google":
@@ -191,9 +192,9 @@ def main(
         )
     )
 
-    retriever_agent = RetrieverAgent(
+    search_agent = SearchAgent(
         config=lr.ChatAgentConfig(
-            name="RetrieverAgent",
+            name="SearchAgent",
             show_stats=False,
             use_tools=tools,
             use_functions_api=not tools,
@@ -233,11 +234,11 @@ def main(
     )
     critic_agent = CriticAgent(critic_agent_config)
 
-    retriever_agent.enable_message(DuckduckgoSearchTool)
-    retriever_agent.enable_message(VulnerabilityCheck)
-    retriever_agent.enable_message(QuestionTool, use=False, handle=True)
+    search_agent.enable_message(DuckduckgoSearchTool)
+    search_agent.enable_message(VulnerabilityCheck)
+    search_agent.enable_message(QuestionTool, use=False, handle=True)
     # agent is producing AnswerTool, so LLM should not be allowed to "use" it
-    retriever_agent.enable_message(AnswerTool, use=False, handle=True)
+    search_agent.enable_message(AnswerTool, use=False, handle=True)
 
     dependency_agent.enable_message(ConstructDepsGraphTool, use=False, handle=True)
     dependency_agent.enable_message(QuestionTool, use=False, handle=True)
@@ -266,8 +267,8 @@ def main(
         interactive=False,
     )
 
-    retriever_task = lr.Task(
-        retriever_agent,
+    search_task = lr.Task(
+        search_agent,
         interactive=False,
         llm_delegate=True,
         single_round=False,
@@ -285,11 +286,12 @@ def main(
         interactive=False,
     )
 
-    assistant_task.add_sub_task([dependency_task, retriever_task, critic_task])
-
-    assistant_task.run(
-        "what's the density of the dependency graph of chainlit version 1.1.200 pypi? find total number of nodes and relathionships and then compute the density"
+    assistant_task.add_sub_task([dependency_task, search_task, critic_task])
+    question = Prompt.ask(
+        """Ask the question and provide the package information: Name, Version,
+        and Ecosystem"""
     )
+    assistant_task.run(question)
 
 
 if __name__ == "__main__":

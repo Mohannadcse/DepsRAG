@@ -9,7 +9,7 @@ import os
 from dependencyrag.dependency_agent import DependencyGraphAgent
 from dependencyrag.critic_agent import CriticAgent
 from dependencyrag.assistant_agent import AssistantAgent
-from dependencyrag.retriever_agent import RetrieverAgent
+from dependencyrag.search_agent import SearchAgent
 
 
 class IterationReport:
@@ -94,7 +94,7 @@ def store_and_reset_analytics_attributes(
     dep_agent: DependencyGraphAgent,
     asst_agent: AssistantAgent,
     critic_agent: CriticAgent,
-    retriever_agent: RetrieverAgent,
+    retriever_agent: SearchAgent,
     question_no: int,
     question_str: str,
 ):
