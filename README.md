@@ -7,11 +7,12 @@
 
 # DepsRAG
 
-`DepsRAG` is a chatbot that answers user's questions about software dependencies after representing them as a Knowledge Graph (KG). `DepsRAG` offers the following features:
+`DepsRAG` is a chatbot that answers users' questions about software dependencies after representing them as a Knowledge Graph (KG). `DepsRAG` offers the following features:
 - Constructing the software dependencies (direct and transitive) as a KG.
 - Supporting 4 popular software ecosystems (i.e. PyPI, NPM, Cargo, and Go). 
-- Generatiing atutomatically Cypher queries to retrieve information from the KG.
+- Generating automatically Cypher queries to retrieve information from the KG.
 - Augmenting users' questions with the retrieved information from the KG, as well as from the Web and Vulnerability DB.
+- Leveraging critic-agent interaction to improve the reasoning and clarity of the answers.
 
 ## DepsRAG Architecture
 
@@ -23,25 +24,26 @@ DepsRAG comprises the following agents to accomplish its process:
    - `ConstructKGTool`: builds the dependency graph for a given pkg version, using the API
    at [DepsDev](https://deps.dev/).
    - `GraphSchemaTool`: gets schema of Neo4j knowledge-graph.
-   - `CypherQueryTool`: generates cypher queries to get information from
+   - `CypherQueryTool`: generates Cypher queries to get information from
    Neo4j knowledge-graph (Cypher is the query language for Neo4j).
-   - `VisualizeGraph`: visualizes the entire dependency grpah. 
-3. **CriticAgent.** This agent provides a feedback upon the final answer provided by the **AssistantAgent**.
+   - `VisualizeGraph`: visualizes the entire dependency graph. 
+3. **CriticAgent.** This agent provides feedback upon the final answer provided by the **AssistantAgent**.
    - `FeedbackTool`: provides the feedback message. 
 4. **SearchAgent.**
-   - `WebSearchTool`: to find package version and type information. It also can answer other question from the web about other aspects after obtaining the intended information from the dependency graph For examples:
-      - does the dpendency use latest version for this package verion?
+   - `WebSearchTool`: to find package version and type information. It also can answer other questions from the web about other aspects after obtaining the intended information from the dependency graph For example:
+      - does the dependency use the latest version for this package version?
       - can I upgrade this package in the dependency graph?
-    - `VulnerabilityTool`: searches OSV vulnerability DB based on package name, version, and its ecosystem.
+    - `VulnerabilityTool`: searches OSV vulnerability DB based on the package name, version, and ecosystem.
 
 
 ## DepsRAG Workflow
 
 The workflow of `DepsRAG` as follows: 
 - The **AssistantAgent** asks you to provide the package name, version, and ecosystem of the intended software package.
-- The **AssistantAgent** forwards these details to the **DependencyGraphAgent** for constructing the dependencies (direct and transitive) as knowledge graph.
+- The **AssistantAgent** forwards these details to the **DependencyGraphAgent** for constructing the dependencies (direct and transitive) as a knowledge graph.
 - The **AssistantAgent** asks you to ask questions about the dependencies.
-- The **AssistantAgent** decomposes complex questions into simple steps and then leverages the RAG mechanism to retreieve additional information from the Web, knowledge graph, and/or vulnerability database to augment the user's question with the additional information.
+- The **AssistantAgent** decomposes complex questions into simple steps and then leverages the RAG mechanism to retrieve additional information from the Web, knowledge graph, and/or vulnerability database to augment the user's question with the additional information. This information is retrieved from the agents **DependencyGraphAgent** and **SearchAgent**.
+- The **AssistantAgent** collects all answers and sends a final answer to the **CriticAgent**, which will provide feedback upon the final answer and/or provide a suggestion to refine the final answer, in case it wasn't satisfied. 
 
 For package X, version, Y, in ecosystem Z, following are examples of questions:
    - what's the depth of the graph?
