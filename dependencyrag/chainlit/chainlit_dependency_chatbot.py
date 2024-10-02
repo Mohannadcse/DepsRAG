@@ -14,14 +14,6 @@ The requirements are described in
 """
 
 import typer
-import requests
-import json
-import os
-from rich import print
-
-from pyvis.network import Network
-import webbrowser
-from pathlib import Path
 
 import langroid as lr
 import langroid.language_models as lm
@@ -34,222 +26,34 @@ from langroid.agent.callbacks.chainlit import (
 )
 from textwrap import dedent
 
+from langroid.utils.configuration import set_global, Settings
+from langroid.agent.tools.google_search_tool import GoogleSearchTool
+from langroid.agent.task import Task
 from langroid.agent.special.neo4j.neo4j_chat_agent import (
-    Neo4jChatAgent,
     Neo4jChatAgentConfig,
     Neo4jSettings,
+    GraphSchemaTool,
+    CypherCreationTool,
 )
-from langroid.utils.constants import NO_ANSWER, SEND_TO
-from langroid.utils.configuration import set_global, Settings
-from langroid.agent.tool_message import ToolMessage
-from langroid.agent.tools.google_search_tool import GoogleSearchTool
+from langroid.agent.tools.duckduckgo_search_tool import DuckduckgoSearchTool
 
-from langroid.agent.task import Task
-from dependencyrag.cypher_message import CONSTRUCT_DEPENDENCY_GRAPH
+from dependencyrag.dependency_agent import DependencyGraphAgent
+from dependencyrag.critic_agent import CriticAgent
+from dependencyrag.assistant_agent import AssistantAgent
+from dependencyrag.search_agent import SearchAgent
+
+from dependencyrag.tools import (
+    ConstructDepsGraphTool,
+    VulnerabilityCheck,
+    QuestionTool,
+    FinalAnswerTool,
+    FeedbackTool,
+    AnswerTool,
+    AnswerToolGraphConstruction,
+    AskNewQuestionTool,
+)
 
 app = typer.Typer()
-
-
-class VulnerabilityCheck(ToolMessage):
-    request = "vulnerability_check"
-    purpose = """
-      Use this tool/function to check for vulnerabilities based on the provided
-      <package_version>, <package_type>, and <package_name>.
-      """
-    package_version: str
-    package_type: str
-    package_name: str
-
-
-class DepGraphTool(ToolMessage):
-    request = "construct_dependency_graph"
-    purpose = f"""Get package <package_version>, <package_type>, and <package_name>.
-    For the <package_version>, obtain the recent version, it should be a number. 
-    For the <package_type>, return if the package is PyPI or not.
-      Otherwise, return {NO_ANSWER}.
-    For the <package_name>, return the package name provided by the user.
-    ALL strings are in lower case.
-    """
-    package_version: str
-    package_type: str
-    package_name: str
-
-
-class VisualizeGraph(ToolMessage):
-    request = "visualize_dependency_graph"
-    purpose = """
-      Use this tool/function to display the dependency graph.
-      """
-    package_version: str
-    package_type: str
-    package_name: str
-    query: str
-
-
-class DependencyGraphAgent(Neo4jChatAgent):
-    def construct_dependency_graph(self, msg: DepGraphTool) -> None:
-        check_db_exist = (
-            "MATCH (n) WHERE n.name = $name AND n.version = $version RETURN n LIMIT 1"
-        )
-        response = self.read_query(
-            check_db_exist, {"name": msg.package_name, "version": msg.package_version}
-        )
-        if response.success and response.data:
-            # self.config.database_created = True
-            return "Database Exists"
-        else:
-            if msg.package_type.lower() == "npm":
-                package_type_system = "NPM"
-            elif msg.package_type.lower() == "pypi":
-                package_type_system = "PyPi"
-            elif msg.package_type.lower() == "go":
-                package_type_system = "GO"
-            elif msg.package_type.lower() == "cargo":
-                package_type_system = "CARGO"
-            else:
-                package_type_system = ""
-            construct_dependency_graph = CONSTRUCT_DEPENDENCY_GRAPH.format(
-                package_type=msg.package_type.lower(),
-                package_name=msg.package_name,
-                package_version=msg.package_version,
-                package_type_system=package_type_system,
-            )
-            response = self.write_query(construct_dependency_graph)
-            if response.success:
-                self.config.database_created = True
-                return "Database is created!"
-            else:
-                return f"""
-                    Database is not created!
-                    Seems the package {msg.package_name} is not found,
-                    """
-
-    def visualize_dependency_graph(self, msg: VisualizeGraph) -> str:
-        """
-        Visualizes the dependency graph based on the provided message.
-
-        Args:
-            msg (VisualizeGraph): The message containing the package info.
-
-        Returns:
-            str: response indicates whether the graph is displayed.
-        """
-        # Query to fetch nodes and relationships
-        # TODO: make this function more general to return customized graphs
-        # i.e, displays paths or subgraphs
-        try:
-            query = """
-            MATCH (n)
-            OPTIONAL MATCH (n)-[r]->(m)
-            RETURN n, r, m
-            """
-
-            query_result = self.read_query(query)
-            nt = Network(notebook=False, height="750px", width="100%", directed=True)
-
-            node_set = set()  # To keep track of added nodes
-
-            for record in query_result.data:
-                # Process node 'n'
-                if "n" in record and record["n"] is not None:
-                    node = record["n"]
-                    # node_id = node.get("id", None)  # Assuming each node has a unique 'id'
-                    node_label = node.get("name", "Unknown Node")
-                    node_title = f"Version: {node.get('version', 'N/A')}"
-                    node_color = "blue"
-                    # if node.get("imported", False) else "green"
-
-                    # Check if node has been added before
-                    if node_label not in node_set:
-                        nt.add_node(
-                            node_label,
-                            label=node_label,
-                            title=node_title,
-                            color=node_color,
-                        )
-                        node_set.add(node_label)
-
-                # Process relationships and node 'm'
-                if (
-                    "r" in record
-                    and record["r"] is not None
-                    and "m" in record
-                    and record["m"] is not None
-                ):
-                    source = record["n"]
-                    target = record["m"]
-                    relationship = record["r"]
-
-                    source_label = source.get("name", "Unknown Node")
-                    target_label = target.get("name", "Unknown Node")
-                    relationship_label = (
-                        relationship[1]
-                        if isinstance(relationship, tuple) and len(relationship) > 1
-                        else "Unknown Relationship"
-                    )
-
-                    # Ensure both source and target nodes are added before adding the edge
-                    if source_label not in node_set:
-                        source_title = f"Version: {source.get('version', 'N/A')}"
-                        source_color = "blue"
-                        nt.add_node(
-                            source_label,
-                            label=source_label,
-                            title=source_title,
-                            color=source_color,
-                        )
-                        node_set.add(source_label)
-                    if target_label not in node_set:
-                        target_title = f"Version: {target.get('version', 'N/A')}"
-                        target_color = "blue"
-                        nt.add_node(
-                            target_label,
-                            label=target_label,
-                            title=target_title,
-                            color=target_color,
-                        )
-                        node_set.add(target_label)
-
-                    nt.add_edge(source_label, target_label, title=relationship_label)
-
-            nt.options.edges.font = {"size": 12, "align": "top"}
-            nt.options.physics.enabled = True
-            nt.show_buttons(filter_=["physics"])
-
-            output_file_path = "/app/html/neo4j_graph.html"
-            nt.write_html(output_file_path)
-            # Construct the host path using the environment variable
-            host_html_path = os.getenv("HOST_HTML_PATH", "/app/html")
-            abs_file_path = os.path.join(host_html_path, "neo4j_graph.html")
-            return f"file:///{abs_file_path}"
-
-        except Exception as e:
-            return f"Failed to create visualization: {str(e)}"
-
-    def vulnerability_check(self, msg: VulnerabilityCheck) -> str:
-        if msg.package_type.lower() == "pypi":
-            ecosystem = "PyPI"
-        # Data payload
-        data = {
-            "version": msg.package_version,
-            "package": {"name": msg.package_name, "ecosystem": ecosystem},
-        }
-
-        # URL
-        url = "https://api.osv.dev/v1/query"
-
-        # Send POST request
-        response = requests.post(url, data=json.dumps(data))
-        response_data = response.json()
-        if "vulns" in response_data:
-            for vuln in response_data["vulns"]:
-                if "references" in vuln:
-                    del vuln["references"]
-                if "affected" in vuln:
-                    for affected in vuln["affected"]:
-                        if "versions" in affected:
-                            del affected["versions"]
-        return json.dumps(response_data, indent=4)
 
 
 async def setup_agent_task():
@@ -267,59 +71,162 @@ async def setup_agent_task():
     )
 
     neo4j_settings = Neo4jSettings()
+    question_tool_name = QuestionTool.default_value("request")
+    construct_dependency_graph_tool_name = ConstructDepsGraphTool.default_value(
+        "request"
+    )
+
+    assistant_agent = AssistantAgent(
+        lr.ChatAgentConfig(
+            name="AssistantAgent",
+            llm=llm_config,
+            system_message=f"""
+            You are a resourceful assistant, able to think step by step to answer
+             complex questions from the user about software dependency graphs.
+            Your task is to:
+             (1) coordinate the other agents to construct and analyze
+             dependency graphs for software packages.
+             (2) Answer user's questions. You must break down complex questions into
+              simpler questions that can be answered by retreieving information from
+              different agents.
+
+            First, ask the user to provide the name of the package, version, and ecosystem,
+             they want to analyze.
+            Then, use the TOOL: `{construct_dependency_graph_tool_name}` to
+            construct the dependency graph.
+            After constructing the dependency graph, the user will ask their questions.
+            You must ask me (the user) each question ONE BY ONE, using the
+               {question_tool_name} in the specified format, and I will retreive the
+               approporiate information from the constructed dependency graph, the web,
+               and/or the vulnerability database.
+               Provide ALL package name, version, and type when you ask a question
+               about vulnerabilities.
+            Once you have enough information to answer my original (complex) question,
+              you MUST present your INTERMEDIATE STEPS and FINAL ANSWER using the
+               `final_answer_tool` in the specified JSON format.
+            You will then receive FEEDBACK from the Critic, and if needed you should
+              try to improve your answer based on this feedback.
+            """,
+        )
+    )
 
     dependency_agent = DependencyGraphAgent(
         config=Neo4jChatAgentConfig(
+            name="DependencyGraphAgent",
             neo4j_settings=neo4j_settings,
             show_stats=False,
+            # use_tools=tools,
+            # use_functions_api=not tools,
             llm=llm_config,
-            addressing_prefix=SEND_TO,
-        ),
+            system_message="""You are an expert in retreiving information from Neo4j
+            graph database.
+            - Use the tool/function `construct_dependency_graph` to construct the
+              dependency graph.
+            - Once you receive the results from the graph database about the dependency
+             graph you must compose a CONCISE answer and say DONE and show the answer
+             to me, in this format: DONE [... your CONCISE answer here ...]
+            """,
+        )
     )
 
-    system_message = f"""You are an expert in Dependency graphs and analyzing them using
-    Neo4j.
+    search_agent = SearchAgent(
+        config=lr.ChatAgentConfig(
+            name="SearchAgent",
+            show_stats=False,
+            # use_tools=tools,
+            # use_functions_api=not tools,
+            llm=llm_config,
+            system_message="""You are an expert in retreiving information about
+             security vulnerabilitiy for packages and performing web search.
+            - Use the tool/function `vulnerability_check` to retrieve vulnerabilitiy
+             information about the provided package name and package version.
+            MAKE SURE you have these information before using this tool/function.
+            - Use the tool/function `duckduckgo_search` to retreive
+             information from the web.
+            """,
+        )
+    )
 
-    FIRST, I'll give you the name of the package that I want to analyze.
+    critic_agent_config = lr.ChatAgentConfig(
+        llm=llm_config,
+        vecdb=None,
+        name="Critic",
+        system_message="""
+        You excel at logical reasoning and combining pieces of information retrieved from:
+        - the dependency graph database
+        - the web search
+        - the vulnerability database
+        To validate the correctness of the answer, YOU NEED to consider graph and Tree
+        concepts because the dependecy graph is a Tree structure, where the root node
+        is the package name provided by the user.
+        The user will send you a summary of the intermediate steps and final answer.
+        You must examine these and provide feedback to the user, using the
+        `feedback_tool`, as follows:
+        - If you think the answer is valid,
+            simply set the `suggested_fix` field to an empty string "".
+        - Otherwise set the `feedback` field to a reason why the answer is invalid,
+            and in the `suggested_fix` field indicate how the user can improve the
+            answer, for example by reasoning differently, or asking different questions.
+        """,
+    )
+    critic_agent = CriticAgent(critic_agent_config)
 
-    THEN, you can also use the `web_search` tool/function to find out information about a package,
-      such as version number and package type (PyPi, NPM, Cargo, or GO).
+    search_agent.enable_message(DuckduckgoSearchTool)
+    search_agent.enable_message(VulnerabilityCheck)
+    search_agent.enable_message(QuestionTool, use=False, handle=True)
+    # agent is producing AnswerTool, so LLM should not be allowed to "use" it
+    search_agent.enable_message(AnswerTool, use=False, handle=True)
 
-    If unable to get this info, you can ask me and I can tell you.
+    dependency_agent.enable_message(ConstructDepsGraphTool, use=False, handle=True)
+    dependency_agent.enable_message(QuestionTool, use=False, handle=True)
+    dependency_agent.disable_message_use(GraphSchemaTool)
+    dependency_agent.disable_message_use(CypherCreationTool)
+    dependency_agent.enable_message(QuestionTool, use=False, handle=True)
+    # agent is producing AnswerTool, so LLM should not be allowed to "use" it
+    dependency_agent.enable_message(AnswerTool, use=False, handle=True)
+    dependency_agent.enable_message(AnswerToolGraphConstruction, use=False, handle=True)
 
-    DON'T forget to include the package name in your questions.
+    assistant_agent.enable_message(QuestionTool, use=True, handle=True)
+    assistant_agent.enable_message(ConstructDepsGraphTool, use=True, handle=True)
+    assistant_agent.enable_message(FinalAnswerTool)
+    assistant_agent.enable_message(FeedbackTool, use=False, handle=True)
+    assistant_agent.enable_message(AnswerTool, use=False, handle=True)  #
+    assistant_agent.enable_message(AnswerToolGraphConstruction, use=False, handle=True)
+    assistant_agent.enable_message(AskNewQuestionTool, use=False, handle=True)
 
-    After receiving this information, make sure the package version is a number and the
-    package type.
-    THEN ask the user if they want to construct the dependency graph,
-    and if so, use the tool/function `construct_dependency_graph` to construct
-      the dependency graph. Otherwise, say `Couldn't retrieve package type or version`
-      and {NO_ANSWER}.
-    After constructing the dependency graph successfully, you will have access to Neo4j
-    graph database, which contains dependency graph.
-    You will try your best to answer my questions. Note that:
-    1. You can use the tool `get_schema` to get node label and relationships in the
-    dependency graph.
-    2. You can use the tool `retrieval_query` to get relevant information from the
-      graph database. I will execute this query and send you back the result.
-      Make sure your queries comply with the database schema.
-    3. Use the `web_search` tool/function to get information if needed.
-    To display the dependency graph use this tool `visualize_dependency_graph`.
-    4. Use the `vulnerability_check` tool to check for vulnerabilities in the package.
-    """
-    task = Task(
+    critic_agent.enable_message(FeedbackTool)
+    critic_agent.enable_message(FinalAnswerTool, use=False, handle=True)
+
+    dependency_task = lr.Task(
         dependency_agent,
-        name="DependencyAgent",
-        system_message=system_message,
+        llm_delegate=True,
+        single_round=False,
+        interactive=False,
     )
 
-    dependency_agent.enable_message(DepGraphTool)
-    dependency_agent.enable_message(GoogleSearchTool)
-    dependency_agent.enable_message(VisualizeGraph)
-    dependency_agent.enable_message(VulnerabilityCheck)
+    search_task = lr.Task(
+        search_agent,
+        interactive=False,
+        llm_delegate=True,
+        single_round=False,
+    )
 
-    cl.user_session.set("dependency_agent", dependency_agent)
-    cl.user_session.set("task", task)
+    assistant_task = lr.Task(
+        assistant_agent,
+        interactive=False,
+        restart=True,
+        config=lr.TaskConfig(inf_loop_cycle_len=0),
+    )
+
+    critic_task = lr.Task(
+        critic_agent,
+        interactive=False,
+    )
+
+    assistant_task.add_sub_task([dependency_task, search_task, critic_task])
+
+    cl.user_session.set("assistant_agent", assistant_agent)
+    cl.user_session.set("assistant_task", assistant_task)
 
 
 @cl.on_settings_update
@@ -359,6 +266,6 @@ async def chat() -> None:
 
 @cl.on_message
 async def on_message(message: cl.Message):
-    task = cl.user_session.get("task")
+    task = cl.user_session.get("assistant_task")
     lr.ChainlitTaskCallbacks(task, message)
     await task.run_async(message.content)
