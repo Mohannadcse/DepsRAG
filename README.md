@@ -69,7 +69,7 @@ The following illustration shows the steps that `DepsRAG` will take to answer th
 <details>
 <summary> <b>Click to expand</b></summary>
 
-- **Sept 2024:** 
+- **Oct 2024:** 
   - Adding critic-agent interaction.
 
 - **Aug 2024:** 
@@ -124,15 +124,6 @@ cp .env-template .env
 Following is a description of these environment variables:
 
 - **LLM Settings:** by default `DepsRAG` support OpenAI model `gpt-4o`. Therefore, `DepsRAG` requires `OPENAI_API_KEY=your-key-here-without-quotes`. However, `DepsRAG` supports other models that are enabled by `Langroid` like [Azure](https://github.com/langroid/langroid?tab=readme-ov-file#set-up-environment-variables-api-keys-etc), [Open/Local LLMs](https://langroid.github.io/langroid/tutorials/local-llm-setup/), and other [non-OpenAI](https://langroid.github.io/langroid/tutorials/non-openai-llms/) proprietary LLMs. Therefore, you need to provide the corresponding environment settings for the required LLM. For example, Azure settings required are listed inside [`.env-template`](.env-template) and start with `AZURE_`.
-
-- **Google Custom Search API Credentials:** Only needed to enable an Agent to use the `GoogleSearchTool`.
-  To use Google Search as an LLM Tool//function-call, 
-  you'll need to set up 
-  [a Google API key](https://developers.google.com/custom-search/v1/introduction#identify_your_application_to_google_with_api_key),
-  then [setup a Google Custom Search Engine (CSE) and get the CSE ID](https://developers.google.com/custom-search/docs/tutorial/creatingcse).
-  (Documentation for these can be challenging, we suggest asking GPT4 for a step-by-step guide.)
-  After obtaining these credentials, store them as values of 
-  `GOOGLE_API_KEY` and `GOOGLE_CSE_ID` in your `.env` file. 
 
 - **Neo4j:** The easiest way to get access to neo4j is
 by creating a cloud account at [Neo4j Aura](https://neo4j.com/cloud/platform/aura-graph-database/). OR you
