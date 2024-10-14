@@ -202,13 +202,11 @@ infromation.
 You can find the paper that describes the details of DepsRAG [HERE](https://arxiv.org/abs/2405.20455)
 
 ```
-@misc{alhanahnah2024depsrag,
-      title={DepsRAG: Towards Managing Software Dependencies using Large Language Models}, 
-      author={Mohannad Alhanahnah and Yazan Boshmaf and Benoit Baudry},
-      year={2024},
-      eprint={2405.20455},
-      archivePrefix={arXiv},
-      primaryClass={cs.SE}
+@inproceedings{depsrag,
+  title={DepsRAG: Towards Agentic Reasoning and Planning for Software Dependency Management},
+  author={Mohannad Alhanahnah and Yazan Boshmaf},
+  booktitle={NeurIPS'24 Workshop on Open-World Agents},
+  year={2024}
 }
 ```
 
