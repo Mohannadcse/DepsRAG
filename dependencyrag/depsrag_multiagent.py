@@ -120,7 +120,7 @@ def main(
     else:
         llm = lm.OpenAIGPTConfig(chat_model=lm.OpenAIChatModel.GPT4o)
 
-    # llm = lm.azure_openai.AzureConfig()
+    llm = lm.azure_openai.AzureConfig()
     # llm = lm.OpenAIGPTConfig(chat_model='groq/llama3-70b-8192')
 
     assistant_agent = AssistantAgent(

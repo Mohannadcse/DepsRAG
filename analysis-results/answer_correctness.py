@@ -57,8 +57,8 @@ else:
     percentage_improvement = float("inf")  # Handle division by zero
 
 # Print success rates and percentage improvement
-print(f"Success Rate Without Critic-Agent: {success_rate_without_critic:.2f}%")
-print(f"Success Rate With Critic-Agent: {success_rate_with_critic:.2f}%")
+print(f"Success Rate Without Agent-Critic: {success_rate_without_critic:.2f}%")
+print(f"Success Rate With Agent-Critic: {success_rate_with_critic:.2f}%")
 print(f"Percentage Improvement in Success Rate: {percentage_improvement:.2f}%")
 
 # Plotting the results as a histogram with grayscale bars and hatching patterns
@@ -74,7 +74,7 @@ plt.bar(
     percent_correct_without_critic,
     width=bar_width,
     color="gray",
-    label="Without Critic-Agent Interaction",
+    label="Without Agent-Critic Interaction",
     hatch="//",
 )
 plt.bar(
@@ -82,7 +82,7 @@ plt.bar(
     percent_correct_with_critic,
     width=bar_width,
     color="darkgray",
-    label="With Critic-Agent Interaction",
+    label="With Agent-Critic Interaction",
     hatch="\\",
 )
 

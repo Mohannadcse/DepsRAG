@@ -67,7 +67,7 @@ def plot_totals(terminations, questions_asked, critic_corrections, output_file):
         width=bar_width,
         edgecolor="black",
         hatch="/",
-        label="Critic-Agent Termination",
+        label="Agent-Critic Termination",
     )
     plt.bar(
         r2,
@@ -85,7 +85,7 @@ def plot_totals(terminations, questions_asked, critic_corrections, output_file):
         width=bar_width,
         edgecolor="black",
         hatch="x",
-        label="Critic Correction Requests",
+        label="Corrections Requested by Agent-Critic",
     )
 
     # Add labels without xlabel, only showing "Question <number>" in xticks
