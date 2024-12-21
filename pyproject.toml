@@ -7,11 +7,11 @@ license = "MIT"
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = ">=3.11,<3.12"
-langroid = ">=0.1.230"
+python = ">=3.10,<3.13"
+langroid = ">=0.28.7"
 neo4j = "^5.18.0"
 pyvis = "^0.3.2"
-chainlit = "1.1.202"
+chainlit = {version = "1.1.202", optional = true}
 
 
 [build-system]

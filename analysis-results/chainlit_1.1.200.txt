@@ -1,0 +1,218 @@
+T1:
+---
+"Nodes":64
+"Relationships":112
+"density": = 112/(64×(64−1)) = 112/64×63 = 112/4032≈0.027
+
+T2:
+---
+Package	InDegree
+typing-extensions	10
+anyio	8
+opentelemetry-api	6
+packaging	5
+deprecated	4
+idna	4
+fastapi	3
+pydantic	3
+h11	3
+starlette	3
+
+
+T3:
+---
+here are examples of the conflict,
+[
+  {
+    "ConflictedPackage": "anyio",
+    "Requirements": [
+      ">=3.4.0,<4.0.0",
+      "<5,>=3.4.0",
+      ">=3.0.0"
+    ],
+    "DependentPackages": [
+      "asyncer",
+      "starlette",
+      "watchfiles",
+      "watchfiles",
+      "asyncer",
+      "starlette"
+    ]
+  },
+  {
+    "ConflictedPackage": "click",
+    "Requirements": [
+      ">=8.1.3,<9.0.0",
+      ">=7.0"
+    ],
+    "DependentPackages": [
+      "chainlit",
+      "uvicorn",
+      "uvicorn",
+      "chainlit"
+    ]
+  },
+  {
+    "ConflictedPackage": "fastapi",
+    "Requirements": [
+      ">=0.61.1",
+      ">=0.110.1,<0.111.0"
+    ],
+    "DependentPackages": [
+      "fastapi-socketio",
+      "chainlit",
+      "chainlit",
+      "fastapi-socketio"
+    ]
+  },
+  {
+    "ConflictedPackage": "h11",
+    "Requirements": [
+      "<1,>=0.9.0",
+      "<0.15,>=0.13",
+      ">=0.8"
+    ],
+    "DependentPackages": [
+      "wsproto",
+      "httpcore",
+      "uvicorn",
+      "uvicorn",
+      "wsproto",
+      "httpcore"
+    ]
+  },
+  {
+    "ConflictedPackage": "idna",
+    "Requirements": [
+      "<4,>=2.5",
+      ">=2.8"
+    ],
+    "DependentPackages": [
+      "requests",
+      "anyio",
+      "anyio",
+      "requests"
+    ]
+  },
+  {
+    "ConflictedPackage": "opentelemetry-api",
+    "Requirements": [
+      "~=1.28.2",
+      "~=1.15",
+      "==1.28.2",
+      "~=1.4"
+    ],
+    "DependentPackages": [
+      "uptrace",
+      "opentelemetry-exporter-otlp-proto-grpc",
+      "opentelemetry-sdk",
+      "opentelemetry-semantic-conventions",
+      "opentelemetry-exporter-otlp-proto-http",
+      "opentelemetry-instrumentation",
+      "opentelemetry-instrumentation",
+      "uptrace",
+      "opentelemetry-exporter-otlp-proto-grpc",
+      "opentelemetry-sdk",
+      "opentelemetry-semantic-conventions",
+      "opentelemetry-exporter-otlp-proto-http"
+    ]
+  },
+  {
+    "ConflictedPackage": "packaging",
+    "Requirements": [
+      ">=17.0",
+      ">=23.1,<24.0",
+      ">=18.0"
+    ],
+    "DependentPackages": [
+      "marshmallow",
+      "chainlit",
+      "opentelemetry-instrumentation",
+      "opentelemetry-instrumentation",
+      "chainlit",
+      "marshmallow"
+    ]
+  },
+  {
+    "ConflictedPackage": "protobuf",
+    "Requirements": [
+      "<6.0,>=5.0",
+      "!=3.20.0,!=3.20.1,!=4.21.1,!=4.21.2,!=4.21.3,!=4.21.4,!=4.21.5,<6.0.0.dev0,>=3.20.2"
+    ],
+    "DependentPackages": [
+      "opentelemetry-proto",
+      "googleapis-common-protos",
+      "googleapis-common-protos",
+      "opentelemetry-proto"
+    ]
+  },
+  {
+    "ConflictedPackage": "pydantic",
+    "Requirements": [
+      "!=1.8,!=1.8.1,!=2.0.0,!=2.0.1,!=2.1.0,<3.0.0,>=1.7.4",
+      ">=1,<3"
+    ],
+    "DependentPackages": [
+      "fastapi",
+      "chainlit",
+      "chainlit",
+      "fastapi"
+    ]
+  },
+  {
+    "ConflictedPackage": "starlette",
+    "Requirements": [
+      "<0.38.0,>=0.37.2",
+      ">=0.37.2,<0.38.0"
+    ],
+    "DependentPackages": [
+      "fastapi",
+      "chainlit",
+      "chainlit",
+      "fastapi"
+    ]
+  },
+  {
+    "ConflictedPackage": "typing-extensions",
+    "Requirements": [
+      ">=3.7.4",
+      ">=4.8.0",
+      ">=4.12.2",
+      ">=4.6.0, !=4.7.0",
+      ">=3.10.0",
+      ">=4.1",
+      ">=4.0"
+    ],
+    "DependentPackages": [
+      "typing-inspect",
+      "fastapi",
+      "pydantic",
+      "pydantic-core",
+      "starlette",
+      "anyio",
+      "opentelemetry-sdk",
+      "uvicorn",
+      "uvicorn",
+      "typing-inspect",
+      "fastapi",
+      "pydantic",
+      "pydantic-core",
+      "starlette",
+      "anyio",
+      "opentelemetry-sdk"
+    ]
+  },
+  {
+    "ConflictedPackage": "wrapt",
+    "Requirements": [
+      "<2,>=1.10",
+      "<2.0.0,>=1.0.0"
+    ],
+    "DependentPackages": [
+      "deprecated",
+      "opentelemetry-instrumentation",
+      "opentelemetry-instrumentation",
+      "deprecated"
+    ]
+  }
+]

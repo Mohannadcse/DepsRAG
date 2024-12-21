@@ -44,7 +44,7 @@ from dependencyrag.search_agent import SearchAgent
 
 from dependencyrag.tools import (
     ConstructDepsGraphTool,
-    VulnerabilityCheck,
+    VulnerabilitySearchTool,
     QuestionTool,
     FinalAnswerTool,
     FeedbackTool,
@@ -172,7 +172,7 @@ async def setup_agent_task():
     critic_agent = CriticAgent(critic_agent_config)
 
     search_agent.enable_message(DuckduckgoSearchTool)
-    search_agent.enable_message(VulnerabilityCheck)
+    search_agent.enable_message(VulnerabilitySearchTool)
     search_agent.enable_message(QuestionTool, use=False, handle=True)
     # agent is producing AnswerTool, so LLM should not be allowed to "use" it
     search_agent.enable_message(AnswerTool, use=False, handle=True)

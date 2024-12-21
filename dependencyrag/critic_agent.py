@@ -4,7 +4,7 @@ from langroid.agent.tools.orchestration import (
     AgentDoneTool,
 )
 
-from dependencyrag.tools import FinalAnswerTool, FeedbackTool
+from dependencyrag.tools import FinalAnswerTool, FeedbackTool, feedback_tool_name
 
 
 class CriticAgent(lr.ChatAgent):
@@ -19,7 +19,7 @@ class CriticAgent(lr.ChatAgent):
 
         return f"""
         The user has presented the following query, intermediate steps and final answer
-        shown below. Please provide feedback using the `feedback_tool`,
+        shown below. Please provide feedback using the `{feedback_tool_name}`,
         with the `feedback` field containing your feedback, and
         the `suggested_fix` field containing a suggested fix, such as fixing how
         the answer or the steps, or how it was obtained from the steps, or
@@ -44,7 +44,7 @@ class CriticAgent(lr.ChatAgent):
         self, msg: str | ChatDocument
     ) -> str | ChatDocument | None:
         if self.expecting_feedback_tool:
-            return """
-            You forgot to provide feedback using the `feedback_tool`
+            return f"""
+            You forgot to provide feedback using the `{feedback_tool_name}`
             on the user's reasoning steps and final answer.
             """

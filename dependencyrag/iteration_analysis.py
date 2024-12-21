@@ -94,7 +94,7 @@ def store_and_reset_analytics_attributes(
     dep_agent: DependencyGraphAgent,
     asst_agent: AssistantAgent,
     critic_agent: CriticAgent,
-    retriever_agent: SearchAgent,
+    search_agent: SearchAgent,
     question_no: int,
     question_str: str,
 ):
@@ -120,4 +120,4 @@ def store_and_reset_analytics_attributes(
     critic_agent.clear_history(0)
     dep_agent.clear_history(0)
     asst_agent.clear_history(0)
-    retriever_agent.clear_history(0)
+    search_agent.clear_history(0)

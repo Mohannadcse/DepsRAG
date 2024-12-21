@@ -3,14 +3,16 @@ from typing import Optional
 import langroid as lr
 from langroid import ChatDocument
 from langroid.agent.tools.duckduckgo_search_tool import DuckduckgoSearchTool
-from langroid.agent.tools.orchestration import (
-    AgentDoneTool,
-)
+from langroid.agent.tools.orchestration import AgentDoneTool
+
 from dependencyrag.tools import (
-    VulnerabilityCheck,
+    VulnerabilitySearchTool,
     QuestionTool,
     AnswerTool,
+    vulnerability_search_tool_name,
 )
+
+duck_duck_go_search_tool_name = DuckduckgoSearchTool.default_value("request")
 
 
 class SearchAgent(lr.ChatAgent):
@@ -34,12 +36,12 @@ class SearchAgent(lr.ChatAgent):
         self.expecting_search_tool = True
         return f"""
         User asked this question: {msg.question}.
-        Use the `vulnerability_check` tool if the question is about vulnerabilities.
-        Otherwise, perform a web search using the `duckduckgo_search` tool
+        Use the `{vulnerability_search_tool_name}` tool if the question is about vulnerabilities.
+        Otherwise, perform a web search using the `{duck_duck_go_search_tool_name}` tool
         using the specified JSON format, to find the answer.
         """
 
-    def vulnerability_check(self, msg: VulnerabilityCheck) -> str:
+    def vulnerability_search(self, msg: VulnerabilitySearchTool) -> str:
         """Override the VulnerabilityCheck handler to update state"""
         self.expecting_search_results = True
         self.expecting_search_tool = False
@@ -75,7 +77,7 @@ class SearchAgent(lr.ChatAgent):
             # return an AnswerTool containing the answer,
             # with a nudge meant for the Assistant
             answer = f"""
-                Here are the web-search results for the question: {curr_query}.
+                Here are the search results for the question: {curr_query}.
                 ===
                 {result.content}
                 """

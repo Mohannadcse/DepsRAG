@@ -1,8 +1,8 @@
 from typing import Optional
+from rich.prompt import Prompt
 
 import langroid as lr
 from langroid import ChatDocument
-from langroid.utils.constants import AT
 from langroid.agent.tools.orchestration import (
     ForwardTool,
 )
@@ -14,6 +14,8 @@ from dependencyrag.tools import (
     AnswerToolGraphConstruction,
     FinalAnswerTool,
     FeedbackTool,
+    final_answer_tool_name,
+    question_tool_name,
 )
 
 
@@ -46,7 +48,7 @@ class AssistantAgent(lr.ChatAgent):
             - If you are ready with the final answer to the user's ORIGINAL QUERY
                 [ Remember it was: {self.original_query} ],
               then present your reasoning steps and final answer using the
-              `final_answer_tool` in the specified JSON format.
+              `{final_answer_tool_name}` in the specified JSON format.
             - If you still need to ask a question, then use the `question_tool`
               to ask a SINGLE question that can be answered by the appropriate agent.
             """
@@ -76,7 +78,7 @@ class AssistantAgent(lr.ChatAgent):
         Now decide whether you want to:
         - present your FINAL answer to the user's ORIGINAL QUERY and INCLUDE the
          provided query if AVAILABLE. OR
-        - ask another question using the `question_tool`
+        - ask another question using the `{question_tool_name}`
             (Maybe REPHRASE the question to get BETTER search results).
         """
 
@@ -99,9 +101,11 @@ class AssistantAgent(lr.ChatAgent):
         return ForwardTool(agent="Critic")
 
     def ask_new_question_tool(self, msg: AskNewQuestionTool) -> str:
-        msg = super().user_response("Please ask your question")
+        msg = Prompt.ask("""Please ask your question: """)
+        # msg = super().user_response("Please ask your question")
         self.accept_new_question = False
         self.original_query = None
+        self.clear_history(3)
         return msg
 
     def feedback_tool(self, msg: FeedbackTool) -> str:
@@ -109,7 +113,7 @@ class AssistantAgent(lr.ChatAgent):
             self.original_query = None
             self.accept_new_question = True
             self.expecting_question_tool = False
-            return "No more suggestions"  # add `, DONE.` to terminate
+            return "No more suggestions, DONE."  # add `, DONE.` to terminate
         else:
             if self.num_critic_responses > 9:
                 self.terminated = True
@@ -120,9 +124,9 @@ class AssistantAgent(lr.ChatAgent):
             return f"""
             Below is feedback about your answer. Take it into account to
             improve your answer, EITHER by:
-            - using the `final_answer_tool` again but with improved REASONING, OR
+            - using the `{final_answer_tool_name}` again but with improved REASONING, OR
             - asking another question using the `question_tool`, and when you're
-                ready, present your final answer again using the `final_answer_tool`.
+                ready, present your final answer again using the `{final_answer_tool_name}`.
 
             FEEDBACK: {msg.feedback}
             SUGGESTED FIX: {msg.suggested_fix}

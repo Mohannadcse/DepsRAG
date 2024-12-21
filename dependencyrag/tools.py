@@ -86,8 +86,8 @@ class QuestionTool(lr.ToolMessage):
     target_agent: str
 
 
-class VulnerabilityCheck(lr.ToolMessage):
-    request = "vulnerability_check"
+class VulnerabilitySearchTool(lr.ToolMessage):
+    request = "vulnerability_search"
     purpose = """
       Use this tool/function to check for vulnerabilities based on the provided
       <package_version>, <package_type>, and <package_name>.
@@ -121,8 +121,10 @@ class VulnerabilityCheck(lr.ToolMessage):
                     for affected in vuln["affected"]:
                         if "versions" in affected:
                             del affected["versions"]
-        return f"""Here is the vulnerability Result:
-        {json.dumps(response_data, indent=4)}"""
+            return f"""Here is the vulnerability Result:
+            {json.dumps(response_data, indent=4)}"""
+        else:
+            return f"""No vulnerability found for {self.package_name}!"""
 
 
 class ConstructDepsGraphTool(lr.ToolMessage):
@@ -148,3 +150,12 @@ class VisualizeGraph(lr.ToolMessage):
     package_type: str
     package_name: str
     query: str
+
+
+vulnerability_search_tool_name = VulnerabilitySearchTool.default_value("request")
+construct_dependency_graph_tool_name = ConstructDepsGraphTool.default_value("request")
+visualize_dependency_graph_name = VisualizeGraph.default_value("request")
+question_tool_name = QuestionTool.default_value("request")
+feedback_tool_name = FeedbackTool.default_value("request")
+final_answer_tool_name = FinalAnswerTool.default_value("request")
+ask_new_question_tool_name = AskNewQuestionTool.default_value("request")

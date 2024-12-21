@@ -44,7 +44,7 @@ python3 dependencyrag/depsrag_multiagent.py
 import typer
 
 from dotenv import load_dotenv
-from rich.prompt import Prompt
+from logging import getLogger
 
 import langroid as lr
 import langroid.language_models as lm
@@ -65,7 +65,7 @@ from dependencyrag.dependency_agent import DependencyGraphAgent
 from dependencyrag.critic_agent import CriticAgent
 from dependencyrag.assistant_agent import AssistantAgent
 from dependencyrag.search_agent import SearchAgent
-
+from dependencyrag.iteration_analysis import store_and_reset_analytics_attributes
 from dependencyrag.tools import (
     ConstructDepsGraphTool,
     VulnerabilitySearchTool,
@@ -75,14 +75,19 @@ from dependencyrag.tools import (
     AnswerTool,
     AnswerToolGraphConstruction,
     AskNewQuestionTool,
+    feedback_tool_name,
+    construct_dependency_graph_tool_name,
+    question_tool_name,
+    final_answer_tool_name,
+    vulnerability_search_tool_name,
 )
 
 app = typer.Typer()
+logger = getLogger(__name__)
 
 send_tool_name = SendTool.default_value("request")
 forward_tool_name = ForwardTool.default_value("request")
-question_tool_name = QuestionTool.default_value("request")
-construct_dependency_graph_tool_name = ConstructDepsGraphTool.default_value("request")
+duckduckgo_search_tool_name = DuckduckgoSearchTool.default_value("request")
 
 
 @app.command()
@@ -145,14 +150,14 @@ def main(
             construct the dependency graph.
             After constructing the dependency graph, the user will ask their questions.
             You must ask me (the user) each question ONE BY ONE, using the
-               {question_tool_name} in the specified format, and I will retreive the
+               `{question_tool_name}` in the specified format, and I will retreive the
                approporiate information from the constructed dependency graph, the web,
                and/or the vulnerability database.
                Provide ALL package name, version, and type when you ask a question
                about vulnerabilities.
             Once you have enough information to answer my original (complex) question,
               you MUST present your INTERMEDIATE STEPS and FINAL ANSWER using the
-               `final_answer_tool` in the specified JSON format.
+               `{final_answer_tool_name}` in the specified JSON format.
             You will then receive FEEDBACK from the Critic, and if needed you should
               try to improve your answer based on this feedback.
             """,
@@ -167,14 +172,14 @@ def main(
             use_tools=tools,
             use_functions_api=not tools,
             llm=llm,
-            system_message=f"""You are an expert in retreiving information from Neo4j
-            graph database.
-            - Use the tool/function `{construct_dependency_graph_tool_name}`
-             to construct the dependency graph.
-            - Once you receive the results from the graph database about the dependency
-             graph you must compose a CONCISE answer. You must be absolutely sure that
-             the Agent's message is an ACTUAL ANSWER to the user's query, and not
-             a failed attempt.
+            system_message=f"""You are an expert in querying and retrieving precise information from a Neo4j graph database.
+
+- Use the `{construct_dependency_graph_tool_name}` tool to construct the dependency graph.
+- Ensure that your Cypher queries are optimized and retrieve only the necessary information to address the user's query.
+- After receiving the results from the graph database, compose a **clear, concise, and accurate answer**. Ensure your response directly addresses the user's question without ambiguity.
+- If the query results are incomplete, ambiguous, or inconsistent, **identify the issue** and explain it clearly to the user.
+- Your final response must provide value to the user by delivering a precise answer based on the query results. Avoid generic responses or assumptions.
+- Include the key details from the graph database results in a structured and easy-to-understand format, such as a list or short paragraph.
             """,
         )
     )
@@ -186,12 +191,12 @@ def main(
             use_tools=tools,
             use_functions_api=not tools,
             llm=llm,
-            system_message="""You are an expert in retreiving information about
+            system_message=f"""You are an expert in retreiving information about
              security vulnerabilitiy for packages and performing web search.
-            - Use the tool/function `vulnerability_check` to retrieve vulnerabilitiy
+            - Use the tool/function `{vulnerability_search_tool_name}` to retrieve vulnerabilitiy
              information about the provided package name and package version.
             MAKE SURE you have these information before using this tool/function.
-            - Use the tool/function `duckduckgo_search` to retreive
+            - Use the tool/function `{duckduckgo_search_tool_name}` to retreive
              information from the web.
             """,
         )
@@ -201,22 +206,50 @@ def main(
         llm=llm,
         vecdb=None,
         name="Critic",
-        system_message="""
-        You excel at logical reasoning and combining pieces of information retrieved from:
-        - the dependency graph database
-        - the web search
-        - the vulnerability database
-        To validate the correctness of the answer, YOU NEED to consider graph and Tree
-        concepts because the dependecy graph is a Tree structure, where the root node
-        is the package name provided by the user.
-        The user will send you a summary of the intermediate steps and final answer.
-        You must examine these and provide feedback to the user, using the
-        `feedback_tool`, as follows:
-        - If you think the answer is valid,
-            simply set the `suggested_fix` field to an empty string "".
-        - Otherwise set the `feedback` field to a reason why the answer is invalid,
-            and in the `suggested_fix` field indicate how the user can improve the
-            answer, for example by reasoning differently, or asking different questions.
+        system_message=f"""
+        You are an expert in logical reasoning about software dependency graphs.
+        Your task is to analyze and validate answers and data retrieved from the
+        following sources:
+        - **Dependency Graph Database**: Contains a directed graph of
+        software dependencies where:
+        - The graph is structured as a tree with one root node
+        - Nodes represent packages.
+        - Edges represent dependencies between packages, including direct and
+        transitive dependencies.
+
+        - **Web Search**: Provides additional contextual or corroborative information.
+
+        - **Vulnerability Database**: Contains data about software vulnerabilities
+        relevant to dependencies.
+
+        ### Your Objective:
+        - Evaluate the correctness of the user's proposed answer and reasoning process.
+        - Provide clear, actionable feedback.
+
+        ### Key Instructions:
+        1. **Understand and verify the accuracy of the retreived Data**:
+        - ANY computations and retreived data MUST be grounded and aligend with the characteristics
+        of the `Dependency Graph Database` considering ALL nodes and edges in the graph.
+        - Use information from all data sources holistically, incorporating graph theory
+        principles where applicable.
+
+        2. **Feedback Workflow**:
+        - The user will provide a summary of intermediate steps and a final answer for validation.
+        - Your evaluation should assess logical reasoning, completeness, and alignment
+        with the aforementioned characteristics of the graph databased.
+        - Use the `{feedback_tool_name}` to provide your feedback.
+
+        3. **Feedback Guidelines**:
+        - If the answer is valid:
+            - Set the `suggested_fix` field to an empty string (`""`).
+        - If the answer is invalid:
+            - Provide a clear explanation in the `feedback` field, detailing why the answer is incorrect.
+            - Use the `suggested_fix` field to propose specific improvements, such as:
+            - Alternative reasoning paths.
+            - Additional data queries or computations.
+            - Reframing the problem for better clarity or accuracy.
+
+        Ensure your feedback is concise, constructive, and actionable.
         """,
     )
     critic_agent = CriticAgent(critic_agent_config)
@@ -275,11 +308,32 @@ def main(
 
     assistant_task.add_sub_task([dependency_task, search_task, critic_task])
 
-    question = Prompt.ask(
-        """Ask the question and provide the package information: Name, Version,
-        and Ecosystem"""
-    )
-    assistant_task.run(question)
+    questions_list = {
+        1: """Construct the dependency graph for the package 'chainlit' version 1.1.200 in the PyPI ecosystem,
+          then answer this question based on the constructed graph: What is the density of the graph after constructing the dependency graph?
+          Please include the number of edges and nodes thah have been used to compute the density.""",
+        2: """Construct the dependency graph for the package 'chainlit' version 1.1.200 in the PyPI ecosystem,
+           then answer this question: which packages have the highest in-degree (i.e., the most dependencies relying on them)?
+           Additionally, what risks are associated with vulnerabilities in these packages?""",
+        3: """Construct the dependency graph for the package 'chainlit' version 1.1.200 in the PyPI ecosystem,
+        then answer this question: Are there any multi-version conflicts in the dependency graph
+           where different packages depend on different versions of the same package?
+           If such conflicts exist, provide examples along with all paths leading to these packages from the root node.""",
+    }
+    # assistant_task.run(question)
+
+    for question_no, question_str in questions_list.items():
+        for i in range(1):  # the number of iterations
+            assistant_task.run(question_str)
+            store_and_reset_analytics_attributes(
+                iteration=i,  # The iteration count
+                dep_agent=dependency_agent,
+                asst_agent=assistant_agent,
+                critic_agent=critic_agent,
+                search_agent=search_agent,
+                question_no=question_no,
+                question_str=question_str,
+            )
 
 
 if __name__ == "__main__":
