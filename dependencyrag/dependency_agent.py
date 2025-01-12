@@ -26,12 +26,22 @@ from dependencyrag.tools import (
 from dependencyrag.graph_handler import GraphHandler
 
 
+from langroid.pydantic_v1 import BaseModel
+
+
+class QuestionQueryAnswer(BaseModel):
+    question: str
+    cypher_query: str
+    answer: str
+
+
 class DependencyGraphAgent(Neo4jChatAgent):
     curr_query: str | None = None
     expecting_search_results: bool = False
     expecting_search_tool: bool = False
     # Following attributes are for analytical purposes
     num_corrected_cypher_queries: int = 0
+    question_query_answers: list[QuestionQueryAnswer] = []
 
     def construct_dependency_graph(
         self, msg: ConstructDepsGraphTool
@@ -323,54 +333,81 @@ class DependencyGraphAgent(Neo4jChatAgent):
         self.expecting_search_tool = True
 
         self.config.kg_schema = """
-        - Nodes:
-        1. Package: Properties are `error`, `root`, `total_size`, `name`, `native_modules`, `ecosystem`, `package_name`, `package_version`, `size`, `version`.
-        2. Native: Properties are `name`, `package_name`, `ecosystem`, `is_native_module`.
+            ### Nodes:
+            - `Package`
+            - `Native`
 
-        - Relationships:
-        1. DEPENDS_ON: Connects `Package` to `Package` or `Native`. Property: `requirement`.
+            ### Node Properties
+            **Package**:  
+            - `error`: STRING  
+            - `root`: BOOLEAN  
+            - `total_size`: STRING  
+            - `name`: STRING  
+            - `native_modules`: LIST  
+            - `ecosystem`: STRING, either `pypi` or `native`  
+            - `package_name`: STRING  
+            - `package_version`: STRING  
+            - `size`: STRING  
+            - `version`: STRING  
+
+            **Native**:  
+            - `name`: STRING  
+            - `package_name`: STRING  
+            - `ecosystem`: STRING  
+            - `is_native_module`: BOOLEAN  
+            ---
+            ### Relationship Properties
+            **DEPENDS_ON**:  
+            - `requirement`: STRING  
+            ---
+            ### The relationships are the following (Explanation of the relationship is after //):
+            - (:Package)-[:DEPENDS_ON]->(:Package) // Package depends on another package
+            - (:Package)-[:DEPENDS_ON]->(:Native) // Package depends on a native module
         """
 
         return f"""
         The user asked: {msg.question}
 
-        **Objective:**
-        Generate a **precise**, **optimized**, and **syntactically correct** Cypher query using the `{cypher_retrieval_tool_name}` tool to retrieve **only the necessary information** required to accurately answer the user's question.
+        Generate a **correct and efficient Cypher query** to retrieve the necessary information required to answer the user's question accurately.
 
-        **Graph Schema:**
-        Use the following graph schema for reference: {self.config.kg_schema}.
+        ### Graph Schema:
+        {self.config.kg_schema}
 
-        **Key Instructions:**
+        ---
 
-        1. **Scope to Relevant Labels and Types**:
-        - Focus on the appropriate node labels and relationship types to ensure accurate results.
-        - If labels or types are missing, explicitly account for this in the query with appropriate filters.
+        ### Requirements for the Cypher Query:
 
-        2. **Avoid Inefficient Query Patterns**:
-        - Avoid Cartesian products or unintended matches by structuring queries carefully (e.g., do not use `MATCH (n), ()-[r]->()` unless absolutely necessary).
+        1. **Accurate Traversal and Calculation:**
+        - Separate graph traversal logic from the calculation of metrics such as in-degree, out-degree, or path-based statistics.
+        - Clearly define the purpose of each `MATCH` clause:
+            - Use one `MATCH` for finding nodes or traversing paths.
+            - Use another `MATCH` to calculate specific metrics (e.g., counting incoming or outgoing relationships).
+        - Avoid mixing traversal and metric calculation in a single step to prevent inflated or incorrect results.
 
-        3. **Path-Specific Queries**:
-        - For questions involving paths or relationships, retrieve only the path structure (e.g., shortest paths, dependency chains).
-        - Exclude unrelated properties or data fields that are not essential to the user's query.
+        2. **Avoid Overcounting:**
+        - Deduplicate nodes and relationships wherever applicable using `DISTINCT`.
+        - Be cautious of paths with cycles or multiple routes to the same node that may lead to duplicate counts.
 
-        4. **Minimal Data Retrieval**:
-        - Extract only the fields, nodes, or counts explicitly required to address the question. Avoid retrieving excess or irrelevant data.
+        3. **In-Degree and Out-Degree Specifics:**
+        - To calculate **in-degree**, match all incoming relationships to a node using a pattern like `MATCH ()-[r:RELATIONSHIP_TYPE]->(targetNode)`.
+        - To calculate **out-degree**, match all outgoing relationships from a node using a pattern like `MATCH (sourceNode)-[r:RELATIONSHIP_TYPE]->()`.
+        - For metrics involving paths, use patterns like `[:RELATIONSHIP_TYPE*]` but ensure proper deduplication of nodes and relationships.
 
-        5. **Adhere to Correct Syntax**:
-        - Ensure the query strictly follows Cypher syntax standards to avoid errors during execution.
+        4. **Efficient Query Design:**
+        - Avoid retrieving unrelated data or fields that are not necessary for the calculation.
+        - Minimize the use of `COLLECT` and `UNWIND`, unless explicitly needed for aggregating or flattening data.
+        - Ensure the query captures **all relevant relationships and nodes** without introducing Cartesian products.
 
-        6. **Handle Potential Data Inconsistencies**:
-        - Include filters and checks for missing or inconsistent labels, properties, or relationships to ensure robust query results.
+        ---
 
-        7. **Align with User Context**:
-        - Determine the query's scope based on the user's intent:
-            - For graph-wide questions: Use unscoped counts or filters to match all relevant nodes/relationships.
-            - For entity-specific questions: Restrict queries to specific nodes, relationships, or paths based on the entity's properties.
-
-        8. **Compose a Clear Response**:
-        - After running the query, present a **clear, concise, and accurate response** that directly addresses the user's question without ambiguity.
-        - Highlight key insights or results from the graph database in an easy-to-read format.
-        """
+        ### Response Expectations:
+        - Present a **clear and concise Cypher query** that adheres to the above requirements.
+        - Explain how the query ensures:
+        1. Accurate traversal of the graph.
+        2. Correct calculation of metrics (e.g., in-degree or out-degree).
+        3. Avoidance of common pitfalls such as overcounting or mixing traversal with metric calculations.
+        - Ensure that the response includes only the necessary information to answer the user's question and avoids redundant calculations or extraneous data retrieval.
+"""
 
     def llm_response(
         self, message: Optional[str | ChatDocument] = None
@@ -387,6 +424,11 @@ class DependencyGraphAgent(Neo4jChatAgent):
             self.expecting_search_results = False
             self.expecting_search_tool = False
             evidence = f"Here is the used query: {self.current_retrieval_cypher_query}"
+            self.question_query_answers.append(
+                QuestionQueryAnswer(
+                    question=curr_query, cypher_query=evidence, answer=message.content
+                )
+            )
             # Augment the LLM's composed answer with a helpful nudge
             # back to the Assistant
 

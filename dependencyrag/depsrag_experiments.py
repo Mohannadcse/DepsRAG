@@ -207,20 +207,9 @@ def main(
         vecdb=None,
         name="Critic",
         system_message=f"""
-        You are an expert in logical reasoning about software dependency graphs.
-        Your task is to analyze and validate answers and data retrieved from the
-        following sources:
-        - **Dependency Graph Database**: Contains a directed graph of
-        software dependencies where:
-        - The graph is structured as a tree with one root node
-        - Nodes represent packages.
-        - Edges represent dependencies between packages, including direct and
-        transitive dependencies.
-
-        - **Web Search**: Provides additional contextual or corroborative information.
-
-        - **Vulnerability Database**: Contains data about software vulnerabilities
-        relevant to dependencies.
+        You are an expert in logical reasoning about software dependency graphs
+        represented as a knolwedge graph using Neo4j.
+        Your task is to analyze and validate answers and data retrieved.
 
         ### Your Objective:
         - Evaluate the correctness of the user's proposed answer and reasoning process.
@@ -243,12 +232,14 @@ def main(
         - If the answer is valid:
             - Set the `suggested_fix` field to an empty string (`""`).
         - If the answer is invalid:
-            - Provide a clear explanation in the `feedback` field, detailing why the answer is incorrect.
+            - Provide a clear explanation in the `feedback` field, detailing why the
+             answer is incorrect.
             - Use the `suggested_fix` field to propose specific improvements, such as:
             - Alternative reasoning paths.
             - Additional data queries or computations.
             - Reframing the problem for better clarity or accuracy.
-
+            - If the Cypher query is provided, provide a feedback to refine the Cypher
+             query accurate information from the graph database.
         Ensure your feedback is concise, constructive, and actionable.
         """,
     )
@@ -310,8 +301,7 @@ def main(
 
     questions_list = {
         1: """Construct the dependency graph for the package 'chainlit' version 1.1.200 in the PyPI ecosystem,
-          then answer this question based on the constructed graph: What is the density of the graph after constructing the dependency graph?
-          Please include the number of edges and nodes thah have been used to compute the density.""",
+          then answer this question based on the constructed graph: What is the density of the graph?""",
         2: """Construct the dependency graph for the package 'chainlit' version 1.1.200 in the PyPI ecosystem,
            then answer this question: which packages have the highest in-degree (i.e., the most dependencies relying on them)?
            Additionally, what risks are associated with vulnerabilities in these packages?""",
