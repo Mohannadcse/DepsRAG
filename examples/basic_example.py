@@ -35,7 +35,7 @@ def main():
     response1 = team.run(
         """Please construct the dependency graph for:
         - Package name: chainlit
-        - Version: 2.8.0
+        - Version: 1.1.200
         - Ecosystem: PyPI
         """
     )
