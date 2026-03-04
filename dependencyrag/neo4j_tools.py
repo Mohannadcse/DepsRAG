@@ -297,18 +297,20 @@ def visualize_dependency_graph_func(
             # Process node 'n'
             if "n" in record and record["n"] is not None:
                 node = record["n"]
-                node_label = node.get("name", "Unknown Node")
-                node_title = f"Version: {node.get('version', 'N/A')}"
+                node_name = node.get("name", "Unknown Node")
+                node_version = node.get("version", "N/A")
+                node_id = f"{node_name}@{node_version}"
+                node_title = f"Version: {node_version}"
                 node_color = "blue"
                 
-                if node_label not in node_set:
+                if node_id not in node_set:
                     nt.add_node(
-                        node_label,
-                        label=node_label,
+                        node_id,
+                        label=node_name,
                         title=node_title,
                         color=node_color,
                     )
-                    node_set.add(node_label)
+                    node_set.add(node_id)
             
             # Process relationships
             if (
@@ -318,20 +320,25 @@ def visualize_dependency_graph_func(
                 source = record["n"]
                 target = record["m"]
                 
-                source_label = source.get("name", "Unknown Node")
-                target_label = target.get("name", "Unknown Node")
+                source_name = source.get("name", "Unknown Node")
+                source_version = source.get("version", "N/A")
+                source_id = f"{source_name}@{source_version}"
                 
-                if target_label not in node_set:
-                    target_title = f"Version: {target.get('version', 'N/A')}"
+                target_name = target.get("name", "Unknown Node")
+                target_version = target.get("version", "N/A")
+                target_id = f"{target_name}@{target_version}"
+                
+                if target_id not in node_set:
+                    target_title = f"Version: {target_version}"
                     nt.add_node(
-                        target_label,
-                        label=target_label,
+                        target_id,
+                        label=target_name,
                         title=target_title,
                         color="blue",
                     )
-                    node_set.add(target_label)
+                    node_set.add(target_id)
                 
-                nt.add_edge(source_label, target_label)
+                nt.add_edge(source_id, target_id)
         
         nt.save_graph(output_file)
         return f"Graph visualization saved to {output_file}"
