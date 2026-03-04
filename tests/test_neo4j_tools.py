@@ -1,6 +1,15 @@
 #!/usr/bin/env python3
 """
-Test Neo4j tools and graph construction functionality.
+Integration tests for Neo4j tools and graph construction functionality.
+
+These tests require a live Neo4j instance and are marked with
+``@pytest.mark.integration`` so they can be excluded from the default
+test run::
+
+    pytest -m "not integration"   # skip integration tests
+    pytest -m integration         # run only integration tests
+
+Tests are also automatically skipped when Neo4j credentials are absent.
 
 Tests:
 - Neo4j connection
@@ -12,12 +21,18 @@ Tests:
 """
 
 import os
+
+import pytest
 from dotenv import load_dotenv
+
+from tests.markers import skip_without_neo4j
 
 # Load environment variables
 load_dotenv()
 
 
+@pytest.mark.integration
+@skip_without_neo4j
 def test_neo4j_connection():
     """Test Neo4j database connection."""
     print("\n" + "=" * 80)
@@ -42,6 +57,8 @@ def test_neo4j_connection():
         return False
 
 
+@pytest.mark.integration
+@skip_without_neo4j
 def test_graph_construction_valid_package():
     """Test graph construction with a valid package."""
     print("\n" + "=" * 80)
@@ -71,6 +88,8 @@ def test_graph_construction_valid_package():
         return False
 
 
+@pytest.mark.integration
+@skip_without_neo4j
 def test_graph_construction_invalid_package():
     """Test graph construction with a non-existent package."""
     print("\n" + "=" * 80)
@@ -102,6 +121,8 @@ def test_graph_construction_invalid_package():
         return True
 
 
+@pytest.mark.integration
+@skip_without_neo4j
 def test_case_sensitivity():
     """Test case sensitivity in package names (PyPI)."""
     print("\n" + "=" * 80)
@@ -145,6 +166,8 @@ def test_case_sensitivity():
         return False
 
 
+@pytest.mark.integration
+@skip_without_neo4j
 def test_cypher_query():
     """Test executing a Cypher query."""
     print("\n" + "=" * 80)

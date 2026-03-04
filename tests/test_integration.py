@@ -1,6 +1,15 @@
 #!/usr/bin/env python3
 """
-Test script for DepsRAG individual components.
+Integration tests for DepsRAG individual components.
+
+These tests require external services (Neo4j, LLM API keys) and are marked
+with ``@pytest.mark.integration`` so they can be excluded from the default
+test run::
+
+    pytest -m "not integration"   # skip integration tests
+    pytest -m integration         # run only integration tests
+
+Tests are also automatically skipped when the required credentials are absent.
 
 This script tests:
 1. Neo4j connection
@@ -10,12 +19,18 @@ This script tests:
 """
 
 import os
+
+import pytest
 from dotenv import load_dotenv
+
+from tests.markers import skip_without_llm, skip_without_neo4j
 
 # Load environment variables
 load_dotenv()
 
 
+@pytest.mark.integration
+@skip_without_neo4j
 def test_neo4j_connection():
     """Test Neo4j database connection."""
     print("\n" + "=" * 80)
@@ -40,6 +55,8 @@ def test_neo4j_connection():
         return False
 
 
+@pytest.mark.integration
+@skip_without_neo4j
 def test_individual_tools():
     """Test individual Agno tools."""
     print("\n" + "=" * 80)
@@ -85,6 +102,8 @@ def test_individual_tools():
         return False
 
 
+@pytest.mark.integration
+@skip_without_llm
 def test_individual_agents():
     """Test individual agents."""
     print("\n" + "=" * 80)
@@ -120,6 +139,8 @@ def test_individual_agents():
         return False
 
 
+@pytest.mark.integration
+@skip_without_llm
 def test_team_creation():
     """Test team creation."""
     print("\n" + "=" * 80)
@@ -143,6 +164,9 @@ def test_team_creation():
         return False
 
 
+@pytest.mark.integration
+@skip_without_llm
+@skip_without_neo4j
 def test_simple_query():
     """Test a simple query with the team."""
     print("\n" + "=" * 80)
