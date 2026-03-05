@@ -1,6 +1,15 @@
 #!/usr/bin/env python3
 """
-Test Neo4j tools and graph construction functionality.
+Integration tests for Neo4j tools and graph construction functionality.
+
+These tests require a live Neo4j instance and are marked with
+``@pytest.mark.integration`` so they can be excluded from the default
+test run::
+
+    pytest -m "not integration"   # skip integration tests
+    pytest -m integration         # run only integration tests
+
+Tests are also automatically skipped when Neo4j credentials are absent.
 
 Tests:
 - Neo4j connection
@@ -15,19 +24,14 @@ import os
 import pytest
 from dotenv import load_dotenv
 
+from tests.markers import skip_without_neo4j
+
 # Load environment variables
 load_dotenv()
 
 
-def _require_neo4j():
-    """Skip test if Neo4j environment variables are not configured."""
-    if not os.getenv("NEO4J_URI") or not os.getenv("NEO4J_PASSWORD"):
-        pytest.skip(
-            "Neo4j credentials not configured "
-            "(NEO4J_URI and NEO4J_PASSWORD environment variables required)"
-        )
-
-
+@pytest.mark.integration
+@skip_without_neo4j
 def test_neo4j_connection():
     """Test Neo4j database connection."""
     _require_neo4j()
@@ -41,6 +45,8 @@ def test_neo4j_connection():
     assert schema, "Schema should not be empty"
 
 
+@pytest.mark.integration
+@skip_without_neo4j
 def test_graph_construction_valid_package():
     """Test graph construction with a valid package."""
     _require_neo4j()
@@ -55,6 +61,8 @@ def test_graph_construction_valid_package():
     assert "✓" in result, f"Expected success marker in result, got: {result}"
 
 
+@pytest.mark.integration
+@skip_without_neo4j
 def test_graph_construction_invalid_package():
     """Test graph construction with a non-existent package."""
     _require_neo4j()
@@ -71,6 +79,8 @@ def test_graph_construction_invalid_package():
     )
 
 
+@pytest.mark.integration
+@skip_without_neo4j
 def test_case_sensitivity():
     """Test case sensitivity in package names (PyPI)."""
     _require_neo4j()
@@ -99,6 +109,8 @@ def test_case_sensitivity():
     )
 
 
+@pytest.mark.integration
+@skip_without_neo4j
 def test_cypher_query():
     """Test executing a Cypher query."""
     _require_neo4j()

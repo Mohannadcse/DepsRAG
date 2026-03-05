@@ -2,6 +2,15 @@
 """
 Integration tests for DepsRAG individual components.
 
+These tests require external services (Neo4j, LLM API keys) and are marked
+with ``@pytest.mark.integration`` so they can be excluded from the default
+test run::
+
+    pytest -m "not integration"   # skip integration tests
+    pytest -m integration         # run only integration tests
+
+Tests are also automatically skipped when the required credentials are absent.
+
 Tests:
 1. Neo4j connection
 2. Individual tools
@@ -14,31 +23,14 @@ import os
 import pytest
 from dotenv import load_dotenv
 
+from tests.markers import skip_without_llm, skip_without_neo4j
+
 # Load environment variables
 load_dotenv()
 
 
-def _require_neo4j():
-    """Skip test if Neo4j environment variables are not configured."""
-    if not os.getenv("NEO4J_URI") or not os.getenv("NEO4J_PASSWORD"):
-        pytest.skip(
-            "Neo4j credentials not configured "
-            "(NEO4J_URI and NEO4J_PASSWORD environment variables required)"
-        )
-
-
-def _require_llm():
-    """Skip test if no LLM API key is configured."""
-    has_openai = bool(os.getenv("OPENAI_API_KEY"))
-    has_azure = bool(os.getenv("AZURE_OPENAI_API_KEY"))
-    has_google = bool(os.getenv("GOOGLE_API_KEY"))
-    if not (has_openai or has_azure or has_google):
-        pytest.skip(
-            "No LLM API key configured "
-            "(OPENAI_API_KEY, AZURE_OPENAI_API_KEY, or GOOGLE_API_KEY required)"
-        )
-
-
+@pytest.mark.integration
+@skip_without_neo4j
 def test_neo4j_connection():
     """Test Neo4j database connection."""
     _require_neo4j()
@@ -52,6 +44,8 @@ def test_neo4j_connection():
     assert schema, "Schema should not be empty"
 
 
+@pytest.mark.integration
+@skip_without_neo4j
 def test_individual_tools():
     """Test individual Agno tools."""
     _require_neo4j()
@@ -80,6 +74,8 @@ def test_individual_tools():
     assert web_search is not None
 
 
+@pytest.mark.integration
+@skip_without_llm
 def test_individual_agents():
     """Test individual agents."""
     _require_llm()
@@ -100,6 +96,8 @@ def test_individual_agents():
     assert search_agent.name, "SearchAgent should have a name"
 
 
+@pytest.mark.integration
+@skip_without_llm
 def test_team_creation():
     """Test team creation."""
     _require_llm()
@@ -113,6 +111,9 @@ def test_team_creation():
     assert len(team.members) > 0, "Team should have at least one member"
 
 
+@pytest.mark.integration
+@skip_without_llm
+@skip_without_neo4j
 def test_simple_query():
     """Test a simple query with the team."""
     _require_neo4j()
