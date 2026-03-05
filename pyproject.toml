@@ -1,18 +1,35 @@
 [tool.poetry]
 name = "dependencyrag"
-version = "0.1.1"
-description = "Program Dependency Chatbot"
+version = "0.2.0"
+description = "Program Dependency Chatbot - Agno Version"
 authors = ["Mohannadcse <mohannad.alhanahnah@gmail.com>"]
 license = "MIT"
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = ">=3.10,<3.13"
-langroid = "0.16.6"
+python = ">=3.11,<3.14"
+agno = "^2.5.0"
+openai = "^1.0.0"
 neo4j = "^5.18.0"
 pyvis = "^0.3.2"
-chainlit = "1.1.202"
+requests = "^2.31.0"
+python-dotenv = "^1.0.0"
+rich = "^13.0.0"
+sqlalchemy = "^2.0.0"
+google-genai = "^1.65.0"
+duckduckgo-search = {version = "^5.0.0", optional = true}
 
+[tool.poetry.extras]
+search = ["duckduckgo-search"]
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+pytest-cov = "^4.0.0"
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: marks tests as integration tests requiring external services (deselect with '-m \"not integration\"')",
+]
 
 [build-system]
 requires = ["poetry-core"]
