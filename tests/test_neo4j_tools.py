@@ -1,22 +1,34 @@
 #!/usr/bin/env python3
 """
-Test Neo4j tools and graph construction functionality.
+Integration tests for Neo4j tools and graph construction functionality.
+
+These tests require a live Neo4j instance and are marked with
+``@pytest.mark.integration`` so they can be excluded from the default
+test run::
+
+    pytest -m "not integration"   # skip integration tests
+    pytest -m integration         # run only integration tests
+
+Tests are also automatically skipped when Neo4j credentials are absent.
 
 Tests:
 - Neo4j connection
 - Graph construction with valid packages
 - Graph construction with invalid packages
 - Case sensitivity handling
-- Existing graph detection
 - Cypher query execution
 """
 
 from dotenv import load_dotenv
 
+from tests.markers import skip_without_neo4j
+
 # Load environment variables
 load_dotenv()
 
 
+@pytest.mark.integration
+@skip_without_neo4j
 def test_neo4j_connection():
     """Test Neo4j database connection."""
     from dependencyrag.neo4j_tools import get_neo4j_connection, get_graph_schema_func
@@ -29,6 +41,8 @@ def test_neo4j_connection():
     assert isinstance(schema, str), "Schema should be a string"
 
 
+@pytest.mark.integration
+@skip_without_neo4j
 def test_graph_construction_valid_package():
     """Test graph construction with a valid package."""
     from dependencyrag.neo4j_tools import construct_dependency_graph_func
@@ -40,7 +54,18 @@ def test_graph_construction_valid_package():
     )
     assert "✓" in result, f"Expected success marker in result, got: {result}"
 
+    from dependencyrag.neo4j_tools import construct_dependency_graph_func
 
+    result = construct_dependency_graph_func(
+        package_name="chainlit",
+        package_version="2.8.0",
+        package_type="pypi",
+    )
+    assert "✓" in result, f"Expected success marker in result, got: {result}"
+
+
+@pytest.mark.integration
+@skip_without_neo4j
 def test_graph_construction_invalid_package():
     """Test graph construction with a non-existent package."""
     from dependencyrag.neo4j_tools import construct_dependency_graph_func
@@ -54,6 +79,7 @@ def test_graph_construction_invalid_package():
         f"Expected failure marker for non-existent package, got: {result}"
     )
 
+    from dependencyrag.neo4j_tools import construct_dependency_graph_func
 
 def test_case_sensitivity():
     """Test case sensitivity in package names (PyPI)."""
@@ -78,6 +104,38 @@ def test_case_sensitivity():
     )
 
 
+@pytest.mark.integration
+@skip_without_neo4j
+def test_case_sensitivity():
+    """Test case sensitivity in package names (PyPI)."""
+    _require_neo4j()
+
+    from dependencyrag.neo4j_tools import construct_dependency_graph_func
+
+    result_lower = construct_dependency_graph_func(
+        package_name="chainlit",
+        package_version="2.8.0",
+        package_type="pypi",
+    )
+    result_upper = construct_dependency_graph_func(
+        package_name="Chainlit",
+        package_version="2.8.0",
+        package_type="pypi",
+    )
+
+    assert "✓" in result_lower, (
+        f"Lowercase package name should succeed, got: {result_lower}"
+    )
+    # PyPI is case-sensitive: an incorrectly cased name should return a failure
+    # marker ("✗") or at minimum a warning ("⚠") – both indicate the name was
+    # not resolved as-is.
+    assert "✗" in result_upper or "⚠" in result_upper, (
+        f"Uppercase package name should fail or warn, got: {result_upper}"
+    )
+
+
+@pytest.mark.integration
+@skip_without_neo4j
 def test_cypher_query():
     """Test executing a Cypher query."""
     from dependencyrag.neo4j_tools import execute_cypher_query_func
