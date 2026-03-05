@@ -19,12 +19,25 @@ Tests:
 - Cypher query execution
 """
 
+import pytest
 from dotenv import load_dotenv
 
 from tests.markers import skip_without_neo4j
 
 # Load environment variables
 load_dotenv()
+
+
+def _require_neo4j():
+    """Verify Neo4j connection is available."""
+    from dependencyrag.neo4j_tools import get_neo4j_connection
+    
+    try:
+        conn = get_neo4j_connection()
+        # Test connectivity with a simple query
+        conn.execute_query("RETURN 1 as test")
+    except Exception as exc:
+        pytest.skip(f"Neo4j connection failed: {exc}")
 
 
 @pytest.mark.integration
@@ -79,30 +92,6 @@ def test_graph_construction_invalid_package():
         f"Expected failure marker for non-existent package, got: {result}"
     )
 
-    from dependencyrag.neo4j_tools import construct_dependency_graph_func
-
-def test_case_sensitivity():
-    """Test case sensitivity in package names (PyPI)."""
-    from dependencyrag.neo4j_tools import construct_dependency_graph_func
-
-    result_lower = construct_dependency_graph_func(
-        package_name="chainlit",
-        package_version="2.8.0",
-        package_type="pypi"
-    )
-    assert "✓" in result_lower, (
-        f"Lowercase package name should succeed, got: {result_lower}"
-    )
-
-    result_upper = construct_dependency_graph_func(
-        package_name="Chainlit",
-        package_version="2.8.0",
-        package_type="pypi"
-    )
-    assert "✗" in result_upper or "⚠" in result_upper, (
-        f"Capitalized package name should fail or warn, got: {result_upper}"
-    )
-
 
 @pytest.mark.integration
 @skip_without_neo4j
@@ -137,12 +126,25 @@ def test_case_sensitivity():
 @pytest.mark.integration
 @skip_without_neo4j
 def test_cypher_query():
-    """Test executing a Cypher query."""
-    from dependencyrag.neo4j_tools import execute_cypher_query_func
+    """Test executing a Cypher query with known test data."""
+    from dependencyrag.neo4j_tools import construct_dependency_graph_func, execute_cypher_query_func
 
-    query = "MATCH (p:Package) RETURN count(p) as package_count LIMIT 1"
+    # Ensure test data exists
+    construct_result = construct_dependency_graph_func(
+        package_name="chainlit",
+        package_version="2.8.0",
+        package_type="pypi"
+    )
+    if "✗" in construct_result:
+        pytest.skip("Graph construction failed, skipping query test")
+
+    # Query for the specific package/version we just constructed
+    query = "MATCH (p:Package {name: 'chainlit', version: '2.8.0'}) RETURN count(p) as count"
     result = execute_cypher_query_func(query)
     assert result is not None, "Cypher query result should not be None"
+    assert "count" in result, "Result should contain 'count' field"
+    # Verify the result contains a numeric count (basic validation)
+    assert "'count':" in result or '"count":' in result, "Result should contain count field with value"
 
 
 def run_all_tests():

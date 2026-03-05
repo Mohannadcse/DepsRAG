@@ -23,7 +23,6 @@ python tests/test_neo4j_tools.py
 Integration tests for the complete DepsRAG system.
 
 **Tests:**
-- Neo4j database connection
 - Individual tool functionality
 - Individual agent creation and configuration
 - Team creation and coordination
@@ -52,10 +51,9 @@ OPENAI_API_KEY=your_openai_key
 AZURE_OPENAI_API_KEY=your_azure_key
 AZURE_OPENAI_ENDPOINT=https://your-endpoint.openai.azure.com/
 AZURE_OPENAI_DEPLOYMENT=gpt-4o
-# OR Anthropic
-ANTHROPIC_API_KEY=your_anthropic_key
 # OR Google Gemini
 GOOGLE_API_KEY=your_google_key
+GOOGLE_MODEL_ID=gemini-2.0-flash-exp  # optional
 ```
 
 ### Running All Tests
@@ -101,23 +99,23 @@ python examples/basic_example.py
 - Some tests may create test data in the database
 - Tests use the `chainlit` package (version 2.8.0) as a known good test case
 - Test files use direct imports and can be run standalone or with pytest
+- Tests use skip markers to skip when required services are unavailable
 
+## Test Organization
 
-**Unit Tests (test_neo4j_tools.py):**
+**Neo4j Integration Tests (test_neo4j_tools.py):** 5 tests
 - ✅ Neo4j connection
 - ✅ Graph construction (success and failure cases)
 - ✅ Error handling with clear markers (✓ SUCCESS, ✗ FAILED)
 - ✅ Case sensitivity (PyPI package names)
 - ✅ Cypher query execution
-- ✅ Existing graph detection
 
-**Integration Tests (test_integration.py):**
-- ✅ Full system initialization
+**Integration Tests (test_integration.py):** 4 tests
+- ✅ Individual tool functionality
 - ✅ Agent creation and tool registration
 - ✅ Team coordination
 - ✅ End-to-end query processing
 
-For usage examples, see the `examples/`
-- ✅ Existing graph detection
+**Total:** 9 tests with clear separation between unit and integration coverage.
 
-For agent and team testing, see the examples directory.
+For additional examples, see the `examples/` directory.
