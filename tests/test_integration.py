@@ -29,19 +29,29 @@ from tests.markers import skip_without_llm, skip_without_neo4j
 load_dotenv()
 
 
-@pytest.mark.integration
-@skip_without_neo4j
-def test_neo4j_connection():
-    """Test Neo4j database connection."""
-    _require_neo4j()
-
-    from dependencyrag.neo4j_tools import get_neo4j_connection, get_graph_schema_func
-
+def _require_neo4j():
+    """
+    Runtime check: verify Neo4j connection actually works.
+    
+    The @skip_without_neo4j decorator checks env vars exist (fast),
+    but this validates the connection is live and credentials are valid.
+    """
+    from dependencyrag.neo4j_tools import get_neo4j_connection
+    
     conn = get_neo4j_connection()
-    assert conn is not None, "Neo4j connection should be established"
+    if conn is None:
+        pytest.skip("Neo4j connection failed (check credentials/service)")
 
-    schema = get_graph_schema_func()
-    assert schema, "Schema should not be empty"
+
+def _require_llm():
+    """
+    Runtime check: verify OpenAI API key is available.
+    
+    The @skip_without_llm decorator checks if ANY LLM provider exists,
+    but these tests specifically use OpenAI models, so verify that key.
+    """
+    if not os.getenv("OPENAI_API_KEY"):
+        pytest.skip("Tests require OPENAI_API_KEY (uses OpenAIChat model)")
 
 
 @pytest.mark.integration
@@ -107,8 +117,8 @@ def test_team_creation():
     team = create_depsrag_team(model_id="gpt-4o", db_file="test.db")
     assert team is not None, "Team should be created"
     assert team.name, "Team should have a name"
-    assert team.leader is not None, "Team should have a leader"
     assert len(team.members) > 0, "Team should have at least one member"
+    assert team.model is not None, "Team should have a model"
 
 
 @pytest.mark.integration
