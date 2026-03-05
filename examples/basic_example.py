@@ -29,7 +29,7 @@ def main():
     print("✓ Team initialized!\n")
     
     # Example 1: Build the dependency graph
-    print("2. Building dependency graph for Chainlit 1.1.200 (PyPI)...")
+    print("2. Building dependency graph for Chainlit 2.8.0 (PyPI)...")
     print("-" * 80)
     
     response1 = team.run(
@@ -45,7 +45,7 @@ def main():
     print("\n3. Asking: What are the direct dependencies?")
     print("-" * 80)
     
-    response2 = team.run("What are the direct dependencies of chainlit 1.1.200?")
+    response2 = team.run("What are the direct dependencies of chainlit 2.8.0?")
     print(f"\nResponse: {response2.content}\n")
     
     # Example 3: Check for a specific dependency
@@ -60,7 +60,7 @@ def main():
     print("-" * 80)
     
     response4 = team.run(
-        "Are there any known vulnerabilities in chainlit version 1.1.200?"
+        "Are there any known vulnerabilities in chainlit version 2.8.0?"
     )
     print(f"\nResponse: {response4.content}\n")
     
