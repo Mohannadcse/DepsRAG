@@ -103,7 +103,7 @@ python examples/basic_example.py
 
 ## Test Organization
 
-**Unit Tests (test_neo4j_tools.py):** 5 tests
+**Neo4j Integration Tests (test_neo4j_tools.py):** 5 tests
 - ✅ Neo4j connection
 - ✅ Graph construction (success and failure cases)
 - ✅ Error handling with clear markers (✓ SUCCESS, ✗ FAILED)

@@ -32,9 +32,12 @@ def _require_neo4j():
     """Verify Neo4j connection is available."""
     from dependencyrag.neo4j_tools import get_neo4j_connection
     
-    conn = get_neo4j_connection()
-    if conn is None:
-        pytest.skip("Neo4j connection not available")
+    try:
+        conn = get_neo4j_connection()
+        # Test connectivity with a simple query
+        conn.execute_query("RETURN 1 as test")
+    except Exception as exc:
+        pytest.skip(f"Neo4j connection failed: {exc}")
 
 
 @pytest.mark.integration
@@ -135,11 +138,13 @@ def test_cypher_query():
     if "✗" in construct_result:
         pytest.skip("Graph construction failed, skipping query test")
 
-    # Query for the specific package we just constructed
-    query = "MATCH (p:Package {name: 'chainlit'}) RETURN count(p) as count"
+    # Query for the specific package/version we just constructed
+    query = "MATCH (p:Package {name: 'chainlit', version: '2.8.0'}) RETURN count(p) as count"
     result = execute_cypher_query_func(query)
     assert result is not None, "Cypher query result should not be None"
     assert "count" in result, "Result should contain 'count' field"
+    # Verify the result contains a numeric count (basic validation)
+    assert "'count':" in result or '"count":' in result, "Result should contain count field with value"
 
 
 def run_all_tests():

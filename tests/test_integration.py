@@ -38,20 +38,27 @@ def _require_neo4j():
     """
     from dependencyrag.neo4j_tools import get_neo4j_connection
     
-    conn = get_neo4j_connection()
-    if conn is None:
-        pytest.skip("Neo4j connection failed (check credentials/service)")
+    try:
+        conn = get_neo4j_connection()
+        # Verify connectivity with a simple query
+        conn.execute_query("RETURN 1 as test")
+    except Exception as exc:
+        pytest.skip(f"Neo4j connection failed: {exc}")
 
 
 def _require_llm():
     """
-    Runtime check: verify OpenAI API key is available.
+    Runtime check: verify at least one LLM provider is configured.
     
-    The @skip_without_llm decorator checks if ANY LLM provider exists,
-    but these tests specifically use OpenAI models, so verify that key.
+    Checks for any supported provider (OpenAI, Azure, or Google).
     """
-    if not os.getenv("OPENAI_API_KEY"):
-        pytest.skip("Tests require OPENAI_API_KEY (uses OpenAIChat model)")
+    has_provider = any([
+        os.getenv("OPENAI_API_KEY"),
+        os.getenv("AZURE_OPENAI_API_KEY"),
+        os.getenv("GOOGLE_API_KEY")
+    ])
+    if not has_provider:
+        pytest.skip("No LLM provider configured (need OpenAI, Azure, or Google)")
 
 
 @pytest.mark.integration
