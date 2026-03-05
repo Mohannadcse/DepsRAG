@@ -40,20 +40,22 @@ python tests/test_integration.py
 Tests require the following environment variables (set in `.env`):
 ```bash
 # Neo4j Configuration
-NEO4J_all unit tests
-python tests/test_neo4j_tools.py
-
-# Run integration tests
-python tests/test_integration
+NEO4J_URI=bolt://localhost:7687
+NEO4J_USERNAME=neo4j
 NEO4J_PASSWORD=your_password
 NEO4J_DATABASE=neo4j
 
-# OpenAI or Azure OpenAI (for agent tests)
-OPENAI_API_KEY=your_key
-# OR
+# LLM Provider (choose one or more)
+# OpenAI
+OPENAI_API_KEY=your_openai_key
+# OR Azure OpenAI
 AZURE_OPENAI_API_KEY=your_azure_key
 AZURE_OPENAI_ENDPOINT=https://your-endpoint.openai.azure.com/
 AZURE_OPENAI_DEPLOYMENT=gpt-4o
+# OR Anthropic
+ANTHROPIC_API_KEY=your_anthropic_key
+# OR Google Gemini
+GOOGLE_API_KEY=your_google_key
 ```
 
 ### Running All Tests
