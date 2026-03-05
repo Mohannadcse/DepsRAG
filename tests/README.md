@@ -86,11 +86,11 @@ pytest tests/test_neo4j_tools.py -v
 ## Integration Tests
 
 For comprehensive integration tests of the full DepsRAG system, see:
-- `examples/test_depsrag.py` - Tests agents and team coordination
+- `examples/basic_example.py` - Tests agents and team coordination
 
 Run integration tests:
 ```bash
-python examples/test_depsrag.py
+python examples/basic_example.py
 ```
 
 ## Notes
