@@ -4,7 +4,7 @@ Provides tools for interacting with Neo4j graph database.
 """
 
 import os
-from typing import Optional, Dict,  List, Any
+from typing import Optional, Dict
 from neo4j import GraphDatabase
 from pyvis.network import Network
 

@@ -3,9 +3,8 @@ DepsRAG Team - Multi-agent orchestration for dependency analysis.
 Migrated from Langroid to Agno.
 """
 
-from typing import Optional, Union
+from typing import Optional
 from agno.team import Team, TeamMode
-from agno.models.base import Model
 from agno.db.sqlite import SqliteDb
 
 from dependencyrag.model_factory import create_model
@@ -91,43 +90,3 @@ The AssistantAgent MUST consult CriticAgent to validate answers before respondin
     )
     
     return team
-
-
-def create_simple_depsrag_workflow(
-    model_id: str = "gpt-4o",
-    db_file: str = "depsrag.db"
-):
-    """
-    Create a simpler workflow-based version of DepsRAG.
-    
-    This version uses a sequential workflow instead of a team,
-    which can be more predictable for certain use cases.
-    
-    Args:
-        model_id: OpenAI/Azure model ID to use
-        db_file: SQLite database file for conversation storage
-    
-    Returns:
-        Team: A team configured to work in a workflow-like manner
-    """
-    from agno.workflow import Workflow
-    
-    model = create_model(model_id)
-    db = SqliteDb(db_file=db_file) if db_file else None
-    
-    # Create specialized agents
-    dependency_agent = create_dependency_graph_agent(model=model, db=db)
-    search_agent = create_search_agent(model=model, db=db)
-    
-    # For a workflow, we can create a simpler setup
-    # where tasks flow sequentially
-    workflow = Workflow(
-        name="DepsRAG Workflow",
-        steps=[dependency_agent, search_agent],
-        description="""Sequential workflow for dependency analysis:
-        1. Build and query the dependency graph
-        2. Search for additional information and vulnerabilities
-        """,
-    )
-    
-    return workflow
