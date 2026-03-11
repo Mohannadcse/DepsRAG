@@ -5,10 +5,8 @@ Migrated from Langroid to Agno.
 
 import json
 import requests
-from typing import Optional
 from pydantic import BaseModel, Field
 
-from agno.run import RunContext
 from agno.tools import tool
 
 from dependencyrag.neo4j_tools import (

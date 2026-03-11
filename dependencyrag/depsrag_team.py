@@ -5,7 +5,6 @@ Migrated from Langroid to Agno.
 
 from typing import Optional
 from agno.team import Team, TeamMode
-from agno.models.base import Model
 from agno.db.sqlite import SqliteDb
 
 from dependencyrag.model_factory import create_model
