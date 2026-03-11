@@ -8,7 +8,6 @@ import requests
 from typing import Optional
 from pydantic import BaseModel, Field
 
-from agno.agent import Agent
 from agno.run import RunContext
 from agno.tools import tool
 
@@ -45,14 +44,6 @@ class VulnerabilityRequest(BaseModel):
 class CypherQueryRequest(BaseModel):
     """Request to execute a Cypher query."""
     query: str = Field(description="The Cypher query to execute")
-
-
-class QuestionRequest(BaseModel):
-    """A question from the Assistant to other agents."""
-    question: str = Field(description="The question to ask")
-    target_agent: str = Field(
-        description="Target agent: DependencyGraphAgent or SearchAgent"
-    )
 
 
 class VisualizeGraphRequest(BaseModel):
@@ -249,44 +240,3 @@ def web_search(query: str, num_results: int = 3) -> str:
         return "DuckDuckGo search library not installed. Please install duckduckgo-search."
     except Exception as e:
         return f"Error performing web search: {str(e)}"
-
-
-# ============================================================================
-# Agent State Tools (for managing conversation state)
-# ============================================================================
-
-def mark_graph_constructed(run_context: RunContext) -> None:
-    """Mark that the dependency graph has been constructed."""
-    if not run_context.session_state:
-        run_context.session_state = {}
-    run_context.session_state["graph_constructed"] = True
-
-
-def is_graph_constructed(run_context: RunContext) -> bool:
-    """Check if the dependency graph has been constructed."""
-    if not run_context.session_state:
-        return False
-    return run_context.session_state.get("graph_constructed", False)
-
-
-def save_package_info(
-    run_context: RunContext,
-    package_name: str,
-    package_version: str,
-    package_type: str
-) -> None:
-    """Save package information to session state."""
-    if not run_context.session_state:
-        run_context.session_state = {}
-    run_context.session_state["package_info"] = {
-        "name": package_name,
-        "version": package_version,
-        "type": package_type,
-    }
-
-
-def get_package_info(run_context: RunContext) -> Optional[dict]:
-    """Get package information from session state."""
-    if not run_context.session_state:
-        return None
-    return run_context.session_state.get("package_info")
