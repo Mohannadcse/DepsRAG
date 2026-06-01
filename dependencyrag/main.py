@@ -80,7 +80,8 @@ def get_delegated_member_names(response, team) -> list[str]:
             if not isinstance(member_id, str) or not member_id.strip():
                 continue
 
-            resolved_name = id_to_name.get(member_id.strip().lower(), member_id.strip())
+            normalized_member_id = _normalize_member_id(member_id.strip())
+            resolved_name = id_to_name.get(normalized_member_id, member_id.strip())
             if resolved_name not in delegated:
                 delegated.append(resolved_name)
 
