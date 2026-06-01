@@ -7,6 +7,7 @@ import os
 from typing import Optional, Dict
 from neo4j import GraphDatabase
 from pyvis.network import Network
+import requests
 
 from dependencyrag.cypher_message import CONSTRUCT_DEPENDENCY_GRAPH
 
@@ -28,12 +29,6 @@ class Neo4jConnection:
         with self.driver.session(database=self.database) as session:
             result = session.run(query, parameters or {})
             return [record.data() for record in result]
-    
-    def execute_write_query(self, query: str, parameters: Optional[Dict] = None):
-        """Execute a write query."""
-        with self.driver.session(database=self.database) as session:
-            result = session.write_transaction(lambda tx: tx.run(query, parameters or {}))
-            return result
 
 
 # Global Neo4j connection (will be initialized when needed)
@@ -78,6 +73,34 @@ def construct_dependency_graph_func(
         str: Status message indicating success or failure
     """
     conn = get_neo4j_connection()
+
+    # Fast pre-check: deps.dev can miss newer versions even when they exist in the registry.
+    depsdev_url = (
+        "https://api.deps.dev/v3alpha/systems/"
+        f"{package_type.lower()}/packages/{package_name}/versions/{package_version}:dependencies"
+    )
+    try:
+        response = requests.get(depsdev_url, timeout=15)
+        if response.status_code == 404:
+            return (
+                f"✗ FAILED: Dependency data not found in deps.dev for {package_name} "
+                f"version {package_version} ({package_type.upper()}).\n"
+                f"  This is not a Neo4j/APOC issue. The package/version may exist in the registry\n"
+                f"  but is currently unavailable in deps.dev.\n"
+                f"  Please try a different version and retry."
+            )
+        if response.status_code >= 400:
+            return (
+                f"✗ FAILED: deps.dev returned HTTP {response.status_code} for "
+                f"{package_name} version {package_version} ({package_type.upper()}).\n"
+                f"  Please try again later or use a different version."
+            )
+    except requests.RequestException as e:
+        return (
+            f"✗ FAILED: Could not reach deps.dev while checking {package_name} "
+            f"version {package_version} ({package_type.upper()}).\n"
+            f"  Error: {str(e)}"
+        )
     
     # Check if database already exists
     check_db_exist = (

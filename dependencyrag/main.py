@@ -13,6 +13,7 @@ Or with options:
 
 import os
 import sys
+import json
 from typing import Optional
 
 from dotenv import load_dotenv
@@ -22,6 +23,68 @@ from rich.panel import Panel
 from dependencyrag.depsrag_team import create_depsrag_team
 
 console = Console()
+
+
+def get_team_name(team) -> str:
+    """Return display name from the created team object."""
+    name = getattr(team, "name", None)
+    if isinstance(name, str) and name.strip():
+        return name.strip()
+    return type(team).__name__
+
+
+def get_responder_name(response, team) -> str:
+    """Return the exact responder name from response metadata when available."""
+    for attr in ("agent_name", "from_name", "name", "role"):
+        value = getattr(response, attr, None)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return get_team_name(team)
+
+
+def _normalize_member_id(name: str) -> str:
+    """Normalize a member name to the delegate member_id format."""
+    return "".join(ch for ch in name.lower() if ch.isalnum())
+
+
+def get_delegated_member_names(response, team) -> list[str]:
+    """Extract delegated member names from tool-call traces in a team response."""
+    members = getattr(team, "members", []) or []
+    id_to_name = {}
+    for member in members:
+        member_name = getattr(member, "name", None)
+        if isinstance(member_name, str) and member_name.strip():
+            id_to_name[_normalize_member_id(member_name)] = member_name.strip()
+
+    delegated = []
+    for message in getattr(response, "messages", []) or []:
+        tool_calls = getattr(message, "tool_calls", None) or []
+        for call in tool_calls:
+            if not isinstance(call, dict):
+                continue
+
+            function_data = call.get("function") or {}
+            if function_data.get("name") != "delegate_task_to_member":
+                continue
+
+            raw_args = function_data.get("arguments")
+            if not isinstance(raw_args, str):
+                continue
+
+            try:
+                parsed = json.loads(raw_args)
+            except json.JSONDecodeError:
+                continue
+
+            member_id = parsed.get("member_id")
+            if not isinstance(member_id, str) or not member_id.strip():
+                continue
+
+            resolved_name = id_to_name.get(member_id.strip().lower(), member_id.strip())
+            if resolved_name not in delegated:
+                delegated.append(resolved_name)
+
+    return delegated
 
 
 def check_environment(provider: Optional[str] = None) -> bool:
@@ -148,17 +211,17 @@ This chatbot helps you analyze software dependencies by:
             model_id=model,
             provider=args.provider,
             db_file=db_file,
-            enable_tracing=debug,
         )
         console.print("[green]✓ DepsRAG team initialized successfully![/green]\n")
+        team_name = get_team_name(team)
         
         # Interactive loop
         console.print(
-            "[yellow]AssistantAgent:[/yellow] Hello! I'm here to help you analyze "
+            f"[yellow]{team_name}:[/yellow] Hello! I'm here to help you analyze "
             "software dependencies.\n"
         )
         console.print(
-            "[yellow]AssistantAgent:[/yellow] Please provide:\n"
+            f"[yellow]{team_name}:[/yellow] Please provide:\n"
             "  • Package name\n"
             "  • Package version\n"
             "  • Package ecosystem (PyPI, NPM, Cargo, or Go)\n"
@@ -188,7 +251,19 @@ This chatbot helps you analyze software dependencies by:
                 else:
                     # Non-streaming response
                     response = team.run(user_input)
-                    console.print(f"\n[yellow]AssistantAgent:[/yellow] {response.content}")
+                    responder_name = get_responder_name(response, team)
+                    delegated_members = get_delegated_member_names(response, team)
+                    if delegated_members:
+                        console.print(
+                            f"[dim]Team: {get_team_name(team)} | Member: {', '.join(delegated_members)}[/dim]"
+                        )
+                    else:
+                        console.print(
+                            f"[dim]Team: {get_team_name(team)} | Member: {responder_name}[/dim]"
+                        )
+                    console.print(
+                        f"\n[yellow]{responder_name}:[/yellow] {response.content}"
+                    )
                 
             except KeyboardInterrupt:
                 console.print(
