@@ -5,8 +5,10 @@ Provides tools for interacting with Neo4j graph database.
 
 import os
 from typing import Optional, Dict
+from urllib.parse import quote
 from neo4j import GraphDatabase
 from pyvis.network import Network
+import requests
 
 from dependencyrag.cypher_message import CONSTRUCT_DEPENDENCY_GRAPH
 
@@ -28,12 +30,6 @@ class Neo4jConnection:
         with self.driver.session(database=self.database) as session:
             result = session.run(query, parameters or {})
             return [record.data() for record in result]
-    
-    def execute_write_query(self, query: str, parameters: Optional[Dict] = None):
-        """Execute a write query."""
-        with self.driver.session(database=self.database) as session:
-            result = session.write_transaction(lambda tx: tx.run(query, parameters or {}))
-            return result
 
 
 # Global Neo4j connection (will be initialized when needed)
@@ -132,6 +128,34 @@ def construct_dependency_graph_func(
         
         if not package_type_system:
             return f"Unsupported package type: {package_type}"
+
+        # Fast pre-check for missing deps.dev package/version data.
+        # Run only when graph is not already present to avoid extra latency.
+        depsdev_url = (
+            "https://api.deps.dev/v3alpha/systems/"
+            f"{quote(package_type.lower(), safe='')}/packages/"
+            f"{quote(package_name, safe='')}/versions/"
+            f"{quote(package_version, safe='')}:dependencies"
+        )
+        try:
+            response = requests.get(depsdev_url, timeout=15)
+            if response.status_code == 404:
+                return (
+                    f"✗ FAILED: Dependency data not found in deps.dev for {package_name} "
+                    f"version {package_version} ({package_type.upper()}).\n"
+                    f"  This is not a Neo4j/APOC issue. The package/version may exist in the registry\n"
+                    f"  but is currently unavailable in deps.dev.\n"
+                    f"  Please try a different version and retry."
+                )
+            if response.status_code >= 400:
+                return (
+                    f"✗ FAILED: deps.dev returned HTTP {response.status_code} for "
+                    f"{package_name} version {package_version} ({package_type.upper()}).\n"
+                    f"  Please try again later or use a different version."
+                )
+        except requests.RequestException:
+            # Pre-check should not block graph construction; Neo4j APOC may still reach deps.dev.
+            pass
         
         # Construct the graph
         construct_query = CONSTRUCT_DEPENDENCY_GRAPH.format(
