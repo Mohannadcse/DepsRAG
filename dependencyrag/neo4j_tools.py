@@ -124,6 +124,29 @@ def _download_file(url: str, output_path: str) -> None:
                 handle.write(chunk)
 
 
+def _is_safe_extraction_path(base_dir: str, member_path: str) -> bool:
+    """Check that an archive member path stays within extraction directory."""
+    base_real = os.path.realpath(base_dir)
+    target_real = os.path.realpath(os.path.join(base_dir, member_path))
+    return target_real == base_real or target_real.startswith(base_real + os.sep)
+
+
+def _safe_extract_tar(tar: tarfile.TarFile, extract_dir: str) -> None:
+    """Safely extract a tar archive preventing path traversal."""
+    for member in tar.getmembers():
+        if not _is_safe_extraction_path(extract_dir, member.name):
+            raise ValueError(f"Unsafe tar member path detected: {member.name}")
+    tar.extractall(path=extract_dir)
+
+
+def _safe_extract_zip(zip_ref: zipfile.ZipFile, extract_dir: str) -> None:
+    """Safely extract a zip archive preventing path traversal."""
+    for member in zip_ref.namelist():
+        if not _is_safe_extraction_path(extract_dir, member):
+            raise ValueError(f"Unsafe zip member path detected: {member}")
+    zip_ref.extractall(extract_dir)
+
+
 def _extract_package_artifact(file_path: str, extract_dir: str) -> bool:
     """Extract a wheel or tar.gz package artifact."""
     if (
@@ -132,15 +155,15 @@ def _extract_package_artifact(file_path: str, extract_dir: str) -> bool:
         or file_path.endswith(".crate")
     ):
         with tarfile.open(file_path, "r:gz") as tar:
-            tar.extractall(path=extract_dir)
+            _safe_extract_tar(tar, extract_dir)
         return True
     if file_path.endswith(".whl"):
         with zipfile.ZipFile(file_path, "r") as zip_ref:
-            zip_ref.extractall(extract_dir)
+            _safe_extract_zip(zip_ref, extract_dir)
         return True
     if file_path.endswith(".zip"):
         with zipfile.ZipFile(file_path, "r") as zip_ref:
-            zip_ref.extractall(extract_dir)
+            _safe_extract_zip(zip_ref, extract_dir)
         return True
     return False
 
@@ -205,7 +228,7 @@ def _analyze_pypi_root_artifact(package_name: str, package_version: str) -> Dict
         try:
             if _extract_package_artifact(artifact_path, extract_dir):
                 native_modules = _find_native_modules(extract_dir, ecosystem="pypi")
-        except (tarfile.TarError, zipfile.BadZipFile, OSError) as exc:
+        except (tarfile.TarError, zipfile.BadZipFile, OSError, ValueError) as exc:
             return {
                 "main_package_size": _human_readable_size(main_size_bytes),
                 "total_size": _human_readable_size(total_size_bytes),
@@ -252,7 +275,7 @@ def _analyze_remote_root_artifact(
         try:
             if _extract_package_artifact(artifact_file, extract_dir):
                 native_modules = _find_native_modules(extract_dir, ecosystem=ecosystem)
-        except (tarfile.TarError, zipfile.BadZipFile, OSError) as exc:
+        except (tarfile.TarError, zipfile.BadZipFile, OSError, ValueError) as exc:
             return {
                 "main_package_size": _human_readable_size(main_size_bytes),
                 "total_size": _human_readable_size(total_size_bytes),
@@ -330,7 +353,7 @@ def _analyze_go_root_artifact(package_name: str, package_version: str) -> Dict:
     """Analyze Go module archive for native modules."""
     artifact_url = (
         "https://proxy.golang.org/"
-        f"{quote(package_name, safe='')}/@v/"
+        f"{quote(package_name, safe='/')}/@v/"
         f"{quote(package_version, safe='')}.zip"
     )
     return _analyze_remote_root_artifact(
@@ -353,6 +376,25 @@ def _analyze_root_artifact(ecosystem: str, package_name: str, package_version: s
     if ecosystem == "go":
         return _analyze_go_root_artifact(package_name, package_version)
     return {"error": f"Native artifact analysis not supported for ecosystem: {ecosystem}"}
+
+
+def _enrich_packages_with_artifact_metadata(packages: list[Dict]) -> None:
+    """Attach artifact/native metadata to every package node in-place."""
+    for pkg in packages:
+        ecosystem = str(pkg.get("ecosystem") or "").lower()
+        package_name = pkg.get("name")
+        package_version = pkg.get("version")
+
+        if not ecosystem or not package_name or not package_version:
+            continue
+
+        try:
+            artifact_meta = _analyze_root_artifact(ecosystem, package_name, package_version)
+        except Exception as exc:  # pragma: no cover - defensive guard
+            artifact_meta = {"error": f"Artifact analysis failed: {exc}"}
+
+        if isinstance(artifact_meta, dict):
+            pkg.update(artifact_meta)
 
 
 def _fetch_dependencies_json(system: str, package_name: str, package_version: str) -> Dict:
@@ -582,7 +624,12 @@ def _upload_graph_once(
                 version: item.package_version,
                 ecosystem: item.package_ecosystem
             })
-            MERGE (n:Native {package_name: item.package_name, module: item.module})
+            MERGE (n:Native {
+                package_name: item.package_name,
+                package_version: item.package_version,
+                package_ecosystem: item.package_ecosystem,
+                module: item.module
+            })
             SET n.name = item.module,
                     n.ecosystem = 'native',
                     n.is_native_module = true
@@ -737,7 +784,7 @@ def construct_dependency_graph_func(
             package_version,
         )
         try:
-            response = requests.get(depsdev_url, timeout=15)
+            response = _http_get(depsdev_url, timeout=15)
             if response.status_code == 404:
                 return (
                     f"✗ FAILED: Dependency data not found in deps.dev for {package_name} "
@@ -770,20 +817,8 @@ def construct_dependency_graph_func(
                 f"  Please verify the package exists and try again."
             )
 
-        # Optional artifact/native-module analysis for the root package.
-        artifact_meta = _analyze_root_artifact(
-            normalized_package_type,
-            package_name,
-            package_version,
-        )
-        for pkg in packages:
-            if (
-                pkg.get("name") == package_name
-                and pkg.get("version") == package_version
-                and pkg.get("ecosystem") == normalized_package_type
-            ):
-                pkg.update(artifact_meta)
-                break
+        # Enrich every collected package node with artifact/native-module metadata.
+        _enrich_packages_with_artifact_metadata(packages)
 
         num_packages, num_rels, num_native_nodes = _upload_graph_once(conn, packages, edges)
 

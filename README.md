@@ -13,7 +13,7 @@
 
 - 🗂️ **Dependency Graph Construction**: Build complete dependency trees (direct & transitive) as Neo4j knowledge graphs
 - 🌐 **Multi-Ecosystem Support**: PyPI, NPM, Cargo, and Go packages
-- 🔗 **Cross-Dependency Graph Assembly**: Recursively collect dependency data across ecosystems, enrich root package nodes with artifact/native-module metadata across supported ecosystems, then upload the assembled graph to Neo4j in one write operation
+- 🔗 **Cross-Dependency Graph Assembly**: Recursively collect dependency data across ecosystems, enrich all collected package nodes with artifact/native-module metadata across supported ecosystems, then upload the assembled graph to Neo4j in one write operation
 - 🤖 **Multi-Agent System**: Specialized agents for different tasks
 - 🔍 **Automatic Query Generation**: Natural language to Cypher query translation
 - 🔒 **Security Analysis**: Integration with OSV vulnerability database
@@ -34,7 +34,7 @@ DepsRAG uses a **multi-agent system** with the following specialized agents:
 ### 2. **DependencyGraphAgent**
 - Builds dependency graphs using the deps.dev API
 - Assembles the full dependency graph in memory first, including cross-ecosystem dependencies
-- Enriches root graph nodes with artifact/native-module metadata (PyPI, NPM, Cargo, and Go)
+- Enriches collected graph nodes with artifact/native-module metadata (PyPI, NPM, Cargo, and Go)
 - Uploads nodes and relationships to Neo4j in one atomic write query
 - Translates natural language to Cypher queries
 - Executes queries on the Neo4j knowledge graph
@@ -67,7 +67,7 @@ DepsRAG uses a **multi-agent system** with the following specialized agents:
    ↓
 2. Team Coordinator → DependencyGraphAgent: Build dependency graph
   - Recursively collect dependencies from deps.dev (including cross-ecosystem links)
-  - Enhance root package metadata (for example, native modules across supported ecosystems)
+  - Enhance collected package metadata (for example, native modules across supported ecosystems)
   - Upload assembled graph to Neo4j in one write operation
    ↓
 3. User asks questions about dependencies
@@ -84,6 +84,76 @@ DepsRAG uses a **multi-agent system** with the following specialized agents:
    ↓
 8. Final answer returned to user
 ```
+
+## Native Dependency Identification Approach
+
+DepsRAG identifies native dependencies as an artifact-analysis step layered on top of dependency graph collection.
+
+### 1. Collect package graph first
+- Recursively fetch package dependencies from deps.dev.
+- Normalize each package node with identity `(ecosystem, name, version)`.
+- Build a full in-memory graph snapshot (package nodes + package-package edges) before upload.
+
+### 2. Analyze package artifacts per node
+- For each collected package node, download the package artifact from its ecosystem registry.
+- Extract artifact contents in a temporary workspace.
+- Scan extracted files for native indicators using ecosystem-aware extensions:
+  - PyPI: `.c`, `.cpp`, `.dylib`, `.dll`, `.so*`
+  - npm: `.c`, `.cc`, `.cpp`, `.h`, `.node`, `.dylib`, `.dll`, `.so*`
+  - cargo: `.c`, `.cc`, `.cpp`, `.h`, `.a`, `.dylib`, `.dll`, `.so*`
+  - go: `.c`, `.cc`, `.cpp`, `.h`, `.syso`, `.a`, `.dylib`, `.dll`, `.so*`
+- Attach per-package metadata:
+  - `main_package_size`
+  - `total_size`
+  - `native_modules` (deduplicated basenames)
+
+### 3. Safety and resilience
+- HTTP calls use retry/backoff for transient failures.
+- Archive extraction validates member paths before extraction to prevent path traversal.
+- Artifact analysis is best-effort per package node: failures on one node do not block the whole graph.
+
+### 4. One-shot graph upload
+- Upload package nodes, package-package edges, and package-native edges in one atomic Cypher write.
+- This keeps graph state consistent and avoids partial ingestion.
+
+## Current Graph Schema
+
+DepsRAG currently stores graph data with two node labels and one relationship type.
+
+### Node Labels
+
+1. `Package`
+- Identity key: `(name, version, ecosystem)`
+- Main properties:
+  - `name`: package name
+  - `version`: package version
+  - `ecosystem`: package ecosystem (for example `pypi`, `npm`, `cargo`, `go`)
+  - `package_name`: duplicated canonical name field
+  - `package_version`: duplicated canonical version field
+  - `root`: whether this is the requested root package
+  - `native_modules`: list of detected native module filenames
+  - `main_package_size`: downloaded artifact size
+  - `total_size`: total downloaded size during artifact analysis
+  - `error`: optional error from dependency/artifact processing
+
+2. `Native`
+- Identity key: `(package_name, package_version, package_ecosystem, module)`
+- Main properties:
+  - `name`: native module filename
+  - `module`: native module filename
+  - `package_name`: owning package name
+  - `package_version`: owning package version
+  - `package_ecosystem`: owning package ecosystem
+  - `ecosystem`: fixed value `native`
+  - `is_native_module`: fixed value `true`
+
+### Relationship Types
+
+1. `DEPENDS_ON`
+- `(:Package)-[:DEPENDS_ON]->(:Package)` for package dependencies from deps.dev
+- `(:Package)-[:DEPENDS_ON]->(:Native)` for detected native modules
+- Relationship property:
+  - `requirement`: version/constraint when available (empty string for Package->Native edges)
 
 ## Installation
 

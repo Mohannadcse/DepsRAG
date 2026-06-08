@@ -5,6 +5,9 @@ Unit tests for native dependency utility functions.
 These tests do not require Neo4j or network access.
 """
 
+import tarfile
+import zipfile
+
 from dependencyrag import neo4j_tools
 from dependencyrag.neo4j_tools import _build_native_entries, _find_native_modules
 
@@ -157,3 +160,70 @@ def test_analyze_go_root_artifact_dispatches_to_remote_analyzer(monkeypatch):
     assert captured["ecosystem"] == "go"
     assert captured["artifact_suffix"] == ".zip"
     assert "/@v/" in captured["artifact_url"]
+    assert "%2F" not in captured["artifact_url"], "Module path separators should not be percent-encoded"
+
+
+def test_extract_package_artifact_blocks_zip_path_traversal(tmp_path):
+    """Zip extraction should reject members that escape the extraction directory."""
+    archive = tmp_path / "bad.zip"
+    extract_dir = tmp_path / "extract"
+    extract_dir.mkdir()
+
+    with zipfile.ZipFile(archive, "w") as zip_ref:
+        zip_ref.writestr("../evil.txt", "pwn")
+
+    try:
+        neo4j_tools._extract_package_artifact(str(archive), str(extract_dir))
+        assert False, "Expected ValueError for unsafe zip member path"
+    except ValueError as exc:
+        assert "Unsafe zip member path" in str(exc)
+
+
+def test_extract_package_artifact_blocks_tar_path_traversal(tmp_path):
+    """Tar extraction should reject members that escape the extraction directory."""
+    archive = tmp_path / "bad.tar.gz"
+    extract_dir = tmp_path / "extract"
+    extract_dir.mkdir()
+
+    outside_file = tmp_path / "payload.txt"
+    outside_file.write_text("pwn", encoding="utf-8")
+
+    with tarfile.open(archive, "w:gz") as tar:
+        tar.add(outside_file, arcname="../evil.txt")
+
+    try:
+        neo4j_tools._extract_package_artifact(str(archive), str(extract_dir))
+        assert False, "Expected ValueError for unsafe tar member path"
+    except ValueError as exc:
+        assert "Unsafe tar member path" in str(exc)
+
+
+def test_enrich_packages_with_artifact_metadata_applies_to_all_nodes(monkeypatch):
+    """Artifact/native enrichment should run for every package node."""
+    packages = [
+        {"ecosystem": "pypi", "name": "a", "version": "1.0.0", "native_modules": []},
+        {"ecosystem": "npm", "name": "b", "version": "2.0.0", "native_modules": []},
+        {"ecosystem": "cargo", "name": "c", "version": "3.0.0", "native_modules": []},
+    ]
+    calls = []
+
+    def _fake_analyze(ecosystem, package_name, package_version):
+        calls.append((ecosystem, package_name, package_version))
+        return {
+            "main_package_size": "1.00 KB",
+            "total_size": "1.00 KB",
+            "native_modules": [f"{package_name}.native"],
+        }
+
+    monkeypatch.setattr(neo4j_tools, "_analyze_root_artifact", _fake_analyze)
+
+    neo4j_tools._enrich_packages_with_artifact_metadata(packages)
+
+    assert calls == [
+        ("pypi", "a", "1.0.0"),
+        ("npm", "b", "2.0.0"),
+        ("cargo", "c", "3.0.0"),
+    ]
+    assert packages[0]["native_modules"] == ["a.native"]
+    assert packages[1]["native_modules"] == ["b.native"]
+    assert packages[2]["native_modules"] == ["c.native"]
