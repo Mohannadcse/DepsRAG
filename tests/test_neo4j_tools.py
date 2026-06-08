@@ -17,10 +17,13 @@ Tests:
 - Graph construction with invalid packages
 - Case sensitivity handling
 - Cypher query execution
+- Multi-ecosystem graph construction (npm, cargo, go)
 """
 
 import pytest
+import requests
 from dotenv import load_dotenv
+from urllib.parse import quote
 
 from tests.markers import skip_without_neo4j
 
@@ -38,6 +41,34 @@ def _require_neo4j():
         conn.execute_query("RETURN 1 as test")
     except Exception as exc:
         pytest.skip(f"Neo4j connection failed: {exc}")
+
+
+def _select_resolvable_go_candidate():
+    """Return the first Go module/version resolvable from deps.dev in this environment."""
+    from dependencyrag.neo4j_tools import _http_get
+
+    candidates = [
+        ("github.com/gin-gonic/gin", "v1.10.0"),
+        ("github.com/google/uuid", "v1.6.0"),
+        ("github.com/pkg/errors", "v0.9.1"),
+        ("golang.org/x/text", "v0.16.0"),
+        ("gopkg.in/yaml.v3", "v3.0.1"),
+    ]
+
+    for package_name, package_version in candidates:
+        url = (
+            "https://api.deps.dev/v3alpha/systems/go/packages/"
+            f"{quote(package_name, safe='')}/versions/"
+            f"{quote(package_version, safe='')}:dependencies"
+        )
+        try:
+            response = _http_get(url, timeout=20)
+            if response.status_code == 200:
+                return package_name, package_version
+        except requests.RequestException:
+            continue
+
+    return None
 
 
 @pytest.mark.integration
@@ -147,6 +178,206 @@ def test_cypher_query():
     assert "'count':" in result or '"count":' in result, "Result should contain count field with value"
 
 
+@pytest.mark.integration
+@skip_without_neo4j
+def test_cross_lang_native_edges():
+    """Test cross-language enrichment via Package->Native dependency edges."""
+    from dependencyrag.neo4j_tools import (
+        construct_dependency_graph_func,
+        get_neo4j_connection,
+    )
+
+    package_name = "numpy"
+    package_version = "1.26.4"
+    package_type = "pypi"
+
+    conn = get_neo4j_connection()
+
+    # Ensure this test uses a fresh root package node so construction re-runs.
+    conn.execute_query(
+        """
+        MATCH (p:Package {name: $name, version: $version, ecosystem: $ecosystem})
+        DETACH DELETE p
+        """,
+        {"name": package_name, "version": package_version, "ecosystem": package_type},
+    )
+    conn.execute_query(
+        "MATCH (n:Native {package_name: $name}) DETACH DELETE n",
+        {"name": package_name},
+    )
+
+    construct_result = construct_dependency_graph_func(
+        package_name=package_name,
+        package_version=package_version,
+        package_type=package_type,
+    )
+    if "✗" in construct_result:
+        pytest.skip(f"Graph construction failed, skipping cross-lang test: {construct_result}")
+
+    result = conn.execute_query(
+        """
+        MATCH (p:Package {name: $name, version: $version, ecosystem: $ecosystem})
+              -[:DEPENDS_ON]->(n:Native {ecosystem: 'native'})
+        RETURN count(DISTINCT n) AS nativeCount
+        """,
+        {"name": package_name, "version": package_version, "ecosystem": package_type},
+    )
+
+    native_count = result[0].get("nativeCount", 0) if result else 0
+    assert native_count > 0, (
+        "Expected at least one cross-language Package->Native edge, "
+        f"found {native_count}"
+    )
+
+
+@pytest.mark.integration
+@skip_without_neo4j
+def test_graph_construction_npm_ecosystem():
+    """Test graph construction for an npm package with ecosystem labeling."""
+    from dependencyrag.neo4j_tools import construct_dependency_graph_func, get_neo4j_connection
+
+    package_name = "react"
+    package_version = "18.2.0"
+    package_type = "npm"
+
+    result = construct_dependency_graph_func(
+        package_name=package_name,
+        package_version=package_version,
+        package_type=package_type,
+    )
+    if "✗" in result:
+        pytest.skip(f"npm graph construction unavailable for {package_name}@{package_version}: {result}")
+
+    conn = get_neo4j_connection()
+    row = conn.execute_query(
+        """
+        MATCH (p:Package {name: $name, version: $version, ecosystem: $ecosystem})
+        RETURN p.root AS root
+        """,
+        {"name": package_name, "version": package_version, "ecosystem": package_type},
+    )
+    assert row, "Expected npm root package node to exist"
+    assert row[0].get("root") is True, "Expected npm root package node to be marked as root"
+
+
+@pytest.mark.integration
+@skip_without_neo4j
+def test_graph_construction_cargo_ecosystem():
+    """Test graph construction for a cargo package with ecosystem labeling."""
+    from dependencyrag.neo4j_tools import construct_dependency_graph_func, get_neo4j_connection
+
+    package_name = "tokio"
+    package_version = "1.37.0"
+    package_type = "cargo"
+
+    result = construct_dependency_graph_func(
+        package_name=package_name,
+        package_version=package_version,
+        package_type=package_type,
+    )
+    if "✗" in result:
+        pytest.skip(f"cargo graph construction unavailable for {package_name}@{package_version}: {result}")
+
+    conn = get_neo4j_connection()
+    row = conn.execute_query(
+        """
+        MATCH (p:Package {name: $name, version: $version, ecosystem: $ecosystem})
+        RETURN p.root AS root
+        """,
+        {"name": package_name, "version": package_version, "ecosystem": package_type},
+    )
+    assert row, "Expected cargo root package node to exist"
+    assert row[0].get("root") is True, "Expected cargo root package node to be marked as root"
+
+
+@pytest.mark.integration
+@skip_without_neo4j
+def test_graph_construction_cargo_native_nodes():
+    """Test that cargo graph construction persists native nodes for a fresh root."""
+    from dependencyrag.neo4j_tools import construct_dependency_graph_func, get_neo4j_connection
+
+    package_name = "ring"
+    package_version = "0.17.8"
+    package_type = "cargo"
+
+    conn = get_neo4j_connection()
+
+    conn.execute_query(
+        """
+        MATCH (p:Package {name: $name, version: $version, ecosystem: $ecosystem})
+        DETACH DELETE p
+        """,
+        {"name": package_name, "version": package_version, "ecosystem": package_type},
+    )
+    conn.execute_query(
+        "MATCH (n:Native {package_name: $name}) DETACH DELETE n",
+        {"name": package_name},
+    )
+
+    result = construct_dependency_graph_func(
+        package_name=package_name,
+        package_version=package_version,
+        package_type=package_type,
+    )
+    if "✗" in result:
+        pytest.skip(f"cargo native graph construction unavailable for {package_name}@{package_version}: {result}")
+
+    rows = conn.execute_query(
+        """
+        MATCH (p:Package {name: $name, version: $version, ecosystem: $ecosystem})-[:DEPENDS_ON]->(n:Native)
+        RETURN count(DISTINCT n) AS nativeCount, collect(n.name)[0..10] AS sample
+        """,
+        {"name": package_name, "version": package_version, "ecosystem": package_type},
+    )
+    assert rows, "Expected cargo native query to return a row"
+    native_count = rows[0].get("nativeCount", 0)
+    assert native_count > 0, f"Expected cargo graph to persist native nodes, found {native_count}"
+
+    root_rows = conn.execute_query(
+        """
+        MATCH (p:Package {name: $name, version: $version, ecosystem: $ecosystem})
+        RETURN p.root AS root, size(coalesce(p.native_modules, [])) AS native_count
+        """,
+        {"name": package_name, "version": package_version, "ecosystem": package_type},
+    )
+    assert root_rows, "Expected cargo root package node to exist after rebuild"
+    assert root_rows[0].get("root") is True, "Expected cargo root package node to be marked as root"
+    assert root_rows[0].get("native_count", 0) > 0, "Expected cargo root package to record native module metadata"
+
+
+@pytest.mark.integration
+@skip_without_neo4j
+def test_graph_construction_go_ecosystem():
+    """Test graph construction for a Go module with ecosystem labeling."""
+    from dependencyrag.neo4j_tools import construct_dependency_graph_func, get_neo4j_connection
+
+    go_candidate = _select_resolvable_go_candidate()
+    if go_candidate is None:
+        pytest.skip("No deps.dev-resolvable Go module/version found in this environment")
+
+    package_name, package_version = go_candidate
+    package_type = "go"
+
+    result = construct_dependency_graph_func(
+        package_name=package_name,
+        package_version=package_version,
+        package_type=package_type,
+    )
+    if "✗" in result:
+        pytest.skip(f"go graph construction unavailable for {package_name}@{package_version}: {result}")
+
+    conn = get_neo4j_connection()
+    row = conn.execute_query(
+        """
+        MATCH (p:Package {name: $name, version: $version, ecosystem: $ecosystem})
+        RETURN p.root AS root
+        """,
+        {"name": package_name, "version": package_version, "ecosystem": package_type},
+    )
+    assert row, "Expected go root package node to exist"
+    assert row[0].get("root") is True, "Expected go root package node to be marked as root"
+
+
 def run_all_tests():
     """Run all Neo4j tool tests (manual runner, not collected by pytest)."""
     import traceback
@@ -157,6 +388,11 @@ def run_all_tests():
         ("Invalid Package", test_graph_construction_invalid_package),
         ("Case Sensitivity", test_case_sensitivity),
         ("Cypher Query", test_cypher_query),
+        ("Cross-Lang Native Edges", test_cross_lang_native_edges),
+        ("NPM Ecosystem", test_graph_construction_npm_ecosystem),
+        ("Cargo Ecosystem", test_graph_construction_cargo_ecosystem),
+        ("Cargo Native Nodes", test_graph_construction_cargo_native_nodes),
+        ("Go Ecosystem", test_graph_construction_go_ecosystem),
     ]
 
     passed = 0

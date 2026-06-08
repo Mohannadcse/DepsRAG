@@ -166,3 +166,6 @@ cython_debug/
 
 logs
 poetry.lock
+
+# Native dependency analysis workspace
+depsrag_artifact_*/
