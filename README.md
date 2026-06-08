@@ -5,17 +5,6 @@
 </div>
 <br><br>
 
-## 🚀 What's New in the Agno Version?
-
-This is a complete migration of DepsRAG from **Langroid** to **Agno**, bringing:
-
-- ✨ **Modern multi-agent framework** with Agno's powerful orchestration
-- 🔧 **Simplified tool system** using Agno's native tool decorators
-- 📊 **Better conversation management** with persistent SQLite storage
-- 🎯 **Improved agent coordination** using Agno's Team system
-- 🌐 **Multi-provider LLM support** - OpenAI, Azure OpenAI, and Google Gemini
-- 🔄 **Maintained functionality** - all original features preserved
-
 ## Overview
 
 `DepsRAG` is an AI-powered chatbot that answers questions about software dependencies by representing them as a Knowledge Graph (KG) using Neo4j. It uses a multi-agent system powered by Agno to provide comprehensive, validated answers.
@@ -24,6 +13,7 @@ This is a complete migration of DepsRAG from **Langroid** to **Agno**, bringing:
 
 - 🗂️ **Dependency Graph Construction**: Build complete dependency trees (direct & transitive) as Neo4j knowledge graphs
 - 🌐 **Multi-Ecosystem Support**: PyPI, NPM, Cargo, and Go packages
+- 🔗 **Cross-Dependency Graph Assembly**: Recursively collect dependency data across ecosystems, enrich root package nodes with artifact/native-module metadata across supported ecosystems, then upload the assembled graph to Neo4j in one write operation
 - 🤖 **Multi-Agent System**: Specialized agents for different tasks
 - 🔍 **Automatic Query Generation**: Natural language to Cypher query translation
 - 🔒 **Security Analysis**: Integration with OSV vulnerability database
@@ -34,14 +24,18 @@ This is a complete migration of DepsRAG from **Langroid** to **Agno**, bringing:
 
 DepsRAG uses a **multi-agent system** with the following specialized agents:
 
-### 1. **AssistantAgent** (Team Leader)
-- Orchestrates the entire workflow
-- Breaks down complex questions into simpler steps
-- Aggregates responses from other agents
-- Coordinates with other specialized agents
+### 1. **Team Coordinator** (Agno Team)
+- Orchestrates the end-to-end workflow
+- Delegates package/graph tasks to DependencyGraphAgent
+- Delegates web/security tasks to SearchAgent
+- Synthesizes member outputs into one response
+- Delegates to CriticAgent for validation before final delivery
 
 ### 2. **DependencyGraphAgent**
 - Builds dependency graphs using the deps.dev API
+- Assembles the full dependency graph in memory first, including cross-ecosystem dependencies
+- Enriches root graph nodes with artifact/native-module metadata (PyPI, NPM, Cargo, and Go)
+- Uploads nodes and relationships to Neo4j in one atomic write query
 - Translates natural language to Cypher queries
 - Executes queries on the Neo4j knowledge graph
 - Provides graph visualization capabilities
@@ -62,7 +56,7 @@ DepsRAG uses a **multi-agent system** with the following specialized agents:
 - `check_vulnerability`: Query OSV vulnerability database
 
 ### 4. **CriticAgent**
-- Validates responses from the AssistantAgent
+- Validates responses synthesized by the Team coordinator
 - Provides feedback on reasoning and completeness
 - Ensures high-quality, accurate answers
 
@@ -71,17 +65,20 @@ DepsRAG uses a **multi-agent system** with the following specialized agents:
 ```
 1. User provides package info (name, version, ecosystem)
    ↓
-2. AssistantAgent → DependencyGraphAgent: Build dependency graph
+2. Team Coordinator → DependencyGraphAgent: Build dependency graph
+  - Recursively collect dependencies from deps.dev (including cross-ecosystem links)
+  - Enhance root package metadata (for example, native modules across supported ecosystems)
+  - Upload assembled graph to Neo4j in one write operation
    ↓
 3. User asks questions about dependencies
    ↓
-4. AssistantAgent breaks down complex questions
+4. Team Coordinator breaks down complex questions
    ↓
-5. AssistantAgent coordinates:
+5. Team Coordinator delegates:
    - DependencyGraphAgent: Graph queries
    - SearchAgent: Web search / vulnerability checks
    ↓
-6. AssistantAgent aggregates answers
+6. Team Coordinator aggregates member outputs
    ↓
 7. CriticAgent validates and provides feedback
    ↓
@@ -98,22 +95,6 @@ DepsRAG uses a **multi-agent system** with the following specialized agents:
   - **OpenAI** API Key
   - **Azure OpenAI** credentials
   - **Google Gemini** API Key
-
-### Supported Models
-
-**OpenAI:**
-- `gpt-4o`, `gpt-4o-mini`
-- `gpt-4-turbo`, `gpt-4`
-- `gpt-3.5-turbo`
-
-**Azure OpenAI:**
-- Same models as OpenAI, deployed on Azure
-- Requires Azure OpenAI deployment name
-
-**Google Gemini:**
-- `gemini-2.5-flash`, `gemini-2.5-pro`
-- `gemini-2.0-flash`, `gemini-2.0-flash-001`
-- `gemini-flash-latest`
 
 ### Setup
 
@@ -132,9 +113,31 @@ poetry install
 pip install -e .
 ```
 
-3. **Set up Neo4j:**
-   - Create a free account at [neo4j.com](https://neo4j.com/cloud/platform/aura-graph-database/)
-   - Note your URI, username, and password
+3. **Set up Neo4j (choose one):**
+
+  **Option A: Neo4j Aura (cloud)**
+  - Create a free account at [neo4j.com](https://neo4j.com/cloud/platform/aura-graph-database/)
+  - Note your URI, username, and password
+
+  **Option B: Local Neo4j with Docker**
+  - Start a local Neo4j instance:
+
+```bash
+docker run -d \
+  --name depsrag-neo4j \
+  -p 7474:7474 -p 7687:7687 \
+  -e NEO4J_AUTH=neo4j/password \
+  -e NEO4J_PLUGINS='["apoc"]' \
+  -e NEO4J_dbms_security_procedures_unrestricted=apoc.* \
+  -v neo4j_data:/data \
+  neo4j:5
+```
+
+  - Open the Neo4j Browser at http://localhost:7474
+  - Use the following credentials:
+    - URI: bolt://localhost:7687
+    - Username: neo4j
+    - Password: password
 
 4. **Configure environment variables:**
 ```bash
@@ -207,27 +210,27 @@ python dependencyrag/main.py --provider openai --model gpt-4o
 ```
 You: Please analyze chainlit version 1.1.200 from PyPI
 
-AssistantAgent: I'll help you analyze chainlit 1.1.200. Let me start by 
+DepsRAG (Team Coordinator): I'll help you analyze chainlit 1.1.200. Let me start by 
 constructing the dependency graph...
 
 [DependencyGraphAgent constructs the graph]
 
-AssistantAgent: The dependency graph has been created! What would you like 
+DepsRAG (Team Coordinator): The dependency graph has been created! What would you like 
 to know about the dependencies?
 
 You: What are the direct dependencies?
 
-AssistantAgent: Let me query the graph for direct dependencies...
+DepsRAG (Team Coordinator): Let me query the graph for direct dependencies...
 
 [Returns list of direct dependencies]
 
 You: Are there any known vulnerabilities in this version?
 
-AssistantAgent: Let me check the OSV vulnerability database...
+DepsRAG (Team Coordinator): Let me check the OSV vulnerability database...
 
 [SearchAgent checks for vulnerabilities]
 
-AssistantAgent: I found the following security information...
+DepsRAG (Team Coordinator): I found the following security information...
 ```
 
 ### Programmatic Usage
@@ -292,7 +295,7 @@ After constructing a dependency graph, you can ask:
 Run the test suite:
 
 ```bash
-# Run unit tests
+# Run Neo4j tools integration tests
 python tests/test_neo4j_tools.py
 
 # Run integration tests
@@ -302,10 +305,20 @@ python tests/test_integration.py
 pytest tests/ -v
 ```
 
+Current integration coverage in `tests/test_neo4j_tools.py` includes:
+- Successful/failed graph construction checks
+- Case-sensitivity and query execution checks
+- Cross-language enrichment check (`Package -> Native` edges)
+- Multi-ecosystem graph construction checks (NPM, Cargo, Go)
+- Cargo native persistence check after fresh root rebuild
+
 Run the example script:
 
 ```bash
 python examples/basic_example.py
+
+# Cross-ecosystem smoke check (graph + native nodes)
+python examples/ecosystem_smoke_check.py
 ```
 
 ## Project Structure
@@ -321,11 +334,12 @@ DepsRAG/
 │   ├── neo4j_tools.py           # Neo4j utilities
 │   └── cypher_message.py        # Cypher query templates
 ├── tests/
-│   ├── test_neo4j_tools.py      # Unit tests
+│   ├── test_neo4j_tools.py      # Neo4j tools integration tests
 │   ├── test_integration.py      # Integration tests
 │   └── README.md                # Test documentation
 ├── examples/
 │   └── basic_example.py         # Usage example
+│   └── ecosystem_smoke_check.py # Cross-ecosystem smoke validation
 ├── docs/                        # Documentation assets
 ├── .env-template                # Environment template
 ├── pyproject.toml               # Dependencies
@@ -350,6 +364,11 @@ DepsRAG/
 - Use Python 3.11 or higher
 - Install with `pip install -e .` for development mode
 - Try `poetry install` if pip fails
+
+### Ecosystem Availability Notes
+- DepsRAG supports graph and native analysis for PyPI, NPM, Cargo, and Go.
+- End-to-end Go graph construction depends on deps.dev returning metadata for the selected module/version.
+- If deps.dev returns 404 for Go, use a different module/version candidate or run artifact-only native checks.
 
 ## Contributing
 
@@ -392,6 +411,3 @@ If you use DepsRAG in your research, please cite:
 - **Email**: mohannad.alhanahnah@gmail.com
 - **GitHub**: [@Mohannadcse](https://github.com/Mohannadcse)
 
----
-
-**Note**: This is the Agno-powered version of DepsRAG, featuring multi-provider support (OpenAI, Azure OpenAI, Google Gemini) and a modern multi-agent architecture.
